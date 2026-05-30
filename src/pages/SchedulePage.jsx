@@ -17,7 +17,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
 export default function SchedulePage() {
   const {
-    agents, currentMonday, weekSchedule, forecast, loading, saving,
+    agents, currentMonday, weekSchedule, forecast, slaData, loading, saving,
     updateSlot, markOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
     goNextWeek, goPrevWeek, getSlots, getAgentWeekHours
   } = useSchedule()
@@ -262,6 +262,7 @@ export default function SchedulePage() {
           <ForecastChart
             phoneForecast={forecast.phoneForecast}
             emailForecast={forecast.emailForecast}
+            slaData={slaData}
           />
         )}
 
