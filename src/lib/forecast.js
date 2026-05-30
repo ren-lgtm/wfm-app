@@ -1,4 +1,3 @@
-// Days mapping
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 export const PHONE_START = 12
 export const PHONE_END = 19
@@ -27,6 +26,16 @@ export const BASELINE_EMAIL = {
 
 export const AVG_CALLS_PER_AGENT_HOUR = 7
 export const AVG_EMAILS_PER_AGENT_HOUR = 6
+
+// SLA targets
+export const PHONE_SLA_TARGET = 0.95
+export const EMAIL_SLA_TARGET = 0.95
+
+// Answer rate thresholds for color coding
+export const PHONE_SLA_GREEN = 0.80  // 80%+ = green
+export const PHONE_SLA_AMBER = 0.50  // 50-80% = amber, below 50% = red
+export const EMAIL_SLA_GREEN = 0.80
+export const EMAIL_SLA_AMBER = 0.50
 
 export function buildForecast(phoneRows, emailRows) {
   const phoneByDayHour = {}
@@ -90,21 +99,81 @@ export function computeCoverage(agentDaySlots) {
   return { phoneCov, emailCov }
 }
 
-// Gap thresholds — realistic for current team size
-// 0 agents on phones = critical (red)
-// 1 agent on phones = warn (amber) — can't handle peak alone
-// 2+ agents on phones = ok (green)
+// Answer rate for phones: agents × capacity / expected calls
+export function phoneAnswerRate(agentsOn, expectedCalls) {
+  if (!expectedCalls) return 1
+  return Math.min(1, (agentsOn * AVG_CALLS_PER_AGENT_HOUR) / expectedCalls)
+}
+
+// Answer rate for email: agents × capacity / expected tickets
+export function emailAnswerRate(agentsOn, expectedTickets) {
+  if (!expectedTickets) return 1
+  return Math.min(1, (agentsOn * AVG_EMAILS_PER_AGENT_HOUR) / expectedTickets)
+}
+
+// Gap status based on answer rate
 export function getPhoneGap(agentsOn, expectedCalls) {
-  if (expectedCalls === 0) return 'none'
+  if (!expectedCalls) return 'none'
   if (agentsOn === 0) return 'critical'
-  if (agentsOn === 1) return 'warn'
-  return 'ok'
+  const rate = phoneAnswerRate(agentsOn, expectedCalls)
+  if (rate >= PHONE_SLA_GREEN) return 'ok'
+  if (rate >= PHONE_SLA_AMBER) return 'warn'
+  return 'critical'
 }
 
 export function getEmailGap(agentsOn, expectedTickets) {
-  if (expectedTickets === 0) return 'none'
+  if (!expectedTickets) return 'none'
   if (agentsOn === 0) return 'critical'
-  return 'ok'
+  const rate = emailAnswerRate(agentsOn, expectedTickets)
+  if (rate >= EMAIL_SLA_GREEN) return 'ok'
+  if (rate >= EMAIL_SLA_AMBER) return 'warn'
+  return 'critical'
+}
+
+// Agents needed to hit 95% SLA
+export function agentsNeededPhone(expectedCalls) {
+  return Math.ceil((expectedCalls * PHONE_SLA_TARGET) / AVG_CALLS_PER_AGENT_HOUR)
+}
+
+export function agentsNeededEmail(expectedTickets) {
+  return Math.ceil((expectedTickets * EMAIL_SLA_TARGET) / AVG_EMAILS_PER_AGENT_HOUR)
+}
+
+// Weekly SLA estimate based on schedule
+export function estimateWeeklySLA(weekSchedule, agents, phoneForecast, emailForecast) {
+  let phoneTotalExpected = 0
+  let phoneTotalAnswered = 0
+  let emailTotalExpected = 0
+  let emailTotalAnswered = 0
+
+  for (const day of ['Mon','Tue','Wed','Thu','Fri']) {
+    const agentDaySlots = {}
+    for (const agent of agents) {
+      agentDaySlots[agent.id] = weekSchedule[agent.id]?.[day] || {}
+    }
+    const { phoneCov, emailCov } = computeCoverage(agentDaySlots)
+
+    for (let h = PHONE_START; h < PHONE_END; h++) {
+      const vol = phoneForecast[day]?.[h] || 0
+      phoneTotalExpected += vol
+      phoneTotalAnswered += Math.min(vol, (phoneCov[h] || 0) * AVG_CALLS_PER_AGENT_HOUR)
+    }
+
+    for (let h = WORK_START; h < WORK_END; h++) {
+      const vol = emailForecast[day]?.[h] || 0
+      emailTotalExpected += vol
+      emailTotalAnswered += Math.min(vol, (emailCov[h] || 0) * AVG_EMAILS_PER_AGENT_HOUR)
+    }
+  }
+
+  return {
+    phoneSLA: phoneTotalExpected ? Math.round((phoneTotalAnswered / phoneTotalExpected) * 100) : 0,
+    emailSLA: emailTotalExpected ? Math.round((emailTotalAnswered / emailTotalExpected) * 100) : 0,
+    phoneTotalExpected,
+    phoneTotalAnswered: Math.round(phoneTotalAnswered),
+    emailTotalExpected,
+    emailTotalAnswered: Math.round(emailTotalAnswered),
+  }
 }
 
 export function coveragePct(agentsOn, expectedCalls) {
