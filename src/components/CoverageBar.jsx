@@ -1,6 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { hLabel, getPhoneGap, getEmailGap, PHONE_START, PHONE_END, WORK_START, WORK_END, AVG_EMAILS_PER_AGENT_HOUR } from '../lib/forecast'
+import {
+  hLabel, getPhoneGap, getEmailGap,
+  PHONE_START, PHONE_END, WORK_START, WORK_END,
+  AVG_EMAILS_PER_AGENT_HOUR, AVG_CALLS_PER_AGENT_HOUR,
+  phoneAnswerRate, emailAnswerRate, agentsNeededPhone, agentsNeededEmail
+} from '../lib/forecast'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -63,7 +68,7 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
   return (
     <div className="space-y-2">
 
-      {/* Live queue fetch bar */}
+      {/* Live queue fetch */}
       <div className="flex items-center gap-3 mb-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Live email queue:</span>
@@ -86,7 +91,44 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
         </button>
       </div>
 
-      {/* Phone coverage row */}
+      {/* Phone SLA row */}
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-gray-500 w-14 text-right shrink-0 font-mono">PHONE %</span>
+        <div className="flex gap-0.5 flex-1">
+          {hours.map(h => {
+            const inPhone = h >= PHONE_START && h < PHONE_END
+            if (!inPhone) {
+              return (
+                <div key={h} className="flex-1 h-7 rounded bg-[#0C0F14] border border-[#1A1F2E] flex items-center justify-center">
+                  <span className="text-[9px] text-gray-700">–</span>
+                </div>
+              )
+            }
+            const n = phoneCov[h] || 0
+            const vol = phoneForecast?.[day]?.[h] || 0
+            const gap = getPhoneGap(n, vol)
+            const rate = phoneAnswerRate(n, vol)
+            const needed = agentsNeededPhone(vol)
+            const c = GAP_COLORS[gap]
+            return (
+              <div
+                key={h}
+                title={`${hLabel(h)}: ${n} agents, ~${vol} calls, ${Math.round(rate*100)}% answer rate. Need ${needed} for 95% SLA.`}
+                className={`flex-1 h-7 rounded border ${c.bg} ${c.border} flex flex-col items-center justify-center cursor-default`}
+              >
+                <span className={`text-[10px] font-mono font-medium ${c.text}`}>
+                  {vol > 0 ? `${Math.round(rate*100)}%` : '–'}
+                </span>
+                {vol > 0 && n < needed && (
+                  <span className={`text-[8px] ${c.text} opacity-60`}>need {needed}</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Phone agents row */}
       <div className="flex items-center gap-1">
         <span className="text-[10px] text-gray-500 w-14 text-right shrink-0 font-mono">PHONES</span>
         <div className="flex gap-0.5 flex-1">
@@ -106,11 +148,40 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
             return (
               <div
                 key={h}
-                title={`${hLabel(h)}: ${n} agent${n !== 1 ? 's' : ''} on phones, ~${vol} calls expected`}
+                title={`${hLabel(h)}: ${n} agents on phones, ~${vol} calls expected`}
                 className={`flex-1 h-7 rounded border ${c.bg} ${c.border} flex flex-col items-center justify-center cursor-default`}
               >
                 <span className={`text-[10px] font-mono font-medium ${c.text}`}>{n}</span>
                 {vol > 0 && <span className={`text-[8px] ${c.text} opacity-60`}>{vol}c</span>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Email SLA row */}
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-gray-500 w-14 text-right shrink-0 font-mono">EMAIL %</span>
+        <div className="flex gap-0.5 flex-1">
+          {hours.map(h => {
+            const n = emailCov[h] || 0
+            const vol = emailForecast?.[day]?.[h] || 0
+            const gap = getEmailGap(n, vol)
+            const rate = emailAnswerRate(n, vol)
+            const needed = agentsNeededEmail(vol)
+            const c = GAP_COLORS[gap]
+            return (
+              <div
+                key={h}
+                title={`${hLabel(h)}: ${n} agents, ~${vol} tickets, ${Math.round(rate*100)}% coverage. Need ${needed} for 95% SLA.`}
+                className={`flex-1 h-7 rounded border ${c.bg} ${c.border} flex flex-col items-center justify-center cursor-default`}
+              >
+                <span className={`text-[10px] font-mono font-medium ${c.text}`}>
+                  {vol > 0 ? `${Math.round(rate*100)}%` : '–'}
+                </span>
+                {vol > 0 && n < needed && (
+                  <span className={`text-[8px] ${c.text} opacity-60`}>need {needed}</span>
+                )}
               </div>
             )
           })}
@@ -130,7 +201,6 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
             else if (queue > 0 && queue <= prevQueue) status = 'clearing'
             else if (queue === 0 && agentsOn > 0) status = 'clearing'
             else status = 'empty'
-
             const c = QUEUE_COLORS[status]
             return (
               <div
