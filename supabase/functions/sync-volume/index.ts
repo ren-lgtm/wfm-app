@@ -56,10 +56,12 @@ async function syncAircall() {
   }
 
   const dateStr = etDate(from + 3600) // midday of yesterday ET
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
   const rows = Object.entries(hourCounts).map(([hour, count]) => ({
     date: dateStr,
     hour: parseInt(hour),
     call_count: count,
+    day_of_week: dayNames[new Date(dateStr).getDay()],
   }))
 
   if (rows.length) {
@@ -108,11 +110,13 @@ async function syncGorgias() {
     await new Promise(r => setTimeout(r, 400))
   }
 
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
   const rows = Array.from({ length: 24 }, (_, h) => ({
     date: dateStr,
     hour: h,
     tickets_created: hourCreated[h] || 0,
     tickets_responded: hourResponded[h] || 0,
+    day_of_week: dayNames[new Date(dateStr).getDay()],
   })).filter(r => r.tickets_created > 0 || r.tickets_responded > 0)
 
   if (rows.length) {
