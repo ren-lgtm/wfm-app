@@ -5,7 +5,6 @@ export const PHONE_END = 19
 export const WORK_START = 8
 export const WORK_END = 21
 
-// Baseline from our 30-day pull (fallback if DB empty)
 export const BASELINE_PHONE = {
   Mon: {11:46,12:98,13:62,14:66,15:70,16:79,17:51,18:45,19:39},
   Tue: {11:45,12:132,13:79,14:72,15:75,16:85,17:71,18:48,19:29},
@@ -26,20 +25,17 @@ export const BASELINE_EMAIL = {
   Sun: {9:11,10:8,11:5,12:6,13:5,14:7,15:8,16:9,17:6,18:9},
 }
 
-// Avg calls per agent per hour (weighted from our data)
 export const AVG_CALLS_PER_AGENT_HOUR = 7
 export const AVG_EMAILS_PER_AGENT_HOUR = 6
 
-// Build forecast from DB data, fall back to baseline
 export function buildForecast(phoneRows, emailRows) {
   const phoneByDayHour = {}
   const emailByDayHour = {}
   const phoneCounts = {}
   const emailCounts = {}
 
-  // Aggregate DB rows by day_of_week + hour (average across dates)
   for (const row of phoneRows) {
-    const day = row.day_of_week // 'Mon', 'Tue' etc from DB
+    const day = row.day_of_week
     const h = row.hour
     if (!phoneByDayHour[day]) { phoneByDayHour[day] = {}; phoneCounts[day] = {} }
     if (!phoneByDayHour[day][h]) { phoneByDayHour[day][h] = 0; phoneCounts[day][h] = 0 }
@@ -56,7 +52,6 @@ export function buildForecast(phoneRows, emailRows) {
     emailCounts[day][h]++
   }
 
-  // Average
   const phoneForecast = {}
   const emailForecast = {}
 
@@ -79,9 +74,7 @@ export function buildForecast(phoneRows, emailRows) {
   return { phoneForecast, emailForecast }
 }
 
-// Given slots for a day, compute per-hour phone/email agent counts
 export function computeCoverage(agentDaySlots) {
-  // agentDaySlots: { agentId: { hour: activity } }
   const phoneCov = {}
   const emailCov = {}
 
@@ -97,21 +90,20 @@ export function computeCoverage(agentDaySlots) {
   return { phoneCov, emailCov }
 }
 
-// Gap analysis for a single hour
+// Gap thresholds — realistic for current team size
+// 0 agents on phones = critical (red)
+// 1 agent on phones = warn (amber) — can't handle peak alone
+// 2+ agents on phones = ok (green)
 export function getPhoneGap(agentsOn, expectedCalls) {
-  const capacity = agentsOn * AVG_CALLS_PER_AGENT_HOUR
   if (expectedCalls === 0) return 'none'
-  if (agentsOn === 0 && expectedCalls > 0) return 'critical'
-  if (capacity < expectedCalls * 0.7) return 'critical'
-  if (capacity < expectedCalls) return 'warn'
+  if (agentsOn === 0) return 'critical'
+  if (agentsOn === 1) return 'warn'
   return 'ok'
 }
 
 export function getEmailGap(agentsOn, expectedTickets) {
-  const capacity = agentsOn * AVG_EMAILS_PER_AGENT_HOUR
   if (expectedTickets === 0) return 'none'
-  if (agentsOn === 0 && expectedTickets > 5) return 'critical'
-  if (capacity < expectedTickets * 0.6) return 'warn'
+  if (agentsOn === 0) return 'critical'
   return 'ok'
 }
 
