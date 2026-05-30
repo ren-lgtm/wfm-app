@@ -16,14 +16,33 @@ export function useSchedule() {
       .then(({ data }) => data && setAgents(data))
   }, [])
 
-  // Load forecast data from DB
+  // Load forecast + SLA data from DB
+  const [slaData, setSlaData] = useState({ byDay: {}, byHour: {} })
+
   useEffect(() => {
     async function loadForecast() {
-      const [{ data: phoneRows }, { data: emailRows }] = await Promise.all([
+      const [{ data: phoneRows }, { data: emailRows }, { data: slaRows }] = await Promise.all([
         supabase.from('phone_volume').select('day_of_week,hour,call_count'),
         supabase.from('email_volume').select('day_of_week,hour,tickets_created'),
+        supabase.from('phone_sla').select('day_of_week,hour,answered,missed,avg_wait_secs'),
       ])
       setForecast(buildForecast(phoneRows || [], emailRows || []))
+
+      // Aggregate SLA by day and hour
+      const byDay = {}
+      const byHour = {}
+      for (const row of (slaRows || [])) {
+        const day = row.day_of_week
+        const h = row.hour
+        if (!byDay[day]) byDay[day] = { answered: 0, missed: 0 }
+        byDay[day].answered += row.answered
+        byDay[day].missed += row.missed
+
+        if (!byHour[h]) byHour[h] = { answered: 0, missed: 0 }
+        byHour[h].answered += row.answered
+        byHour[h].missed += row.missed
+      }
+      setSlaData({ byDay, byHour })
     }
     loadForecast()
   }, [])
@@ -197,7 +216,7 @@ export function useSchedule() {
   }, [weekSchedule])
 
   return {
-    agents, currentMonday, weekSchedule, forecast, loading, saving,
+    agents, currentMonday, weekSchedule, forecast, slaData, loading, saving,
     updateSlot, markOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
     goToWeek, goNextWeek, goPrevWeek, getSlots, getAgentWeekHours,
   }
