@@ -9,7 +9,8 @@ import { AgentModal } from '../components/AgentModal'
 import { GapBadge } from '../components/GapBadge'
 import {
   DAYS, formatWeekLabel, computeCoverage,
-  getPhoneGap, getEmailGap, PHONE_START, PHONE_END
+  getPhoneGap, getEmailGap, PHONE_START, PHONE_END,
+  estimateWeeklySLA
 } from '../lib/forecast'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -22,11 +23,10 @@ export default function SchedulePage() {
   } = useSchedule()
 
   const [activeDay, setActiveDay] = useState('Mon')
-  const [activeTab, setActiveTab] = useState('schedule') // schedule | forecast | agents
-  const [agentModal, setAgentModal] = useState(null) // null | 'new' | agent object
+  const [activeTab, setActiveTab] = useState('schedule')
+  const [agentModal, setAgentModal] = useState(null)
   const [copyMsg, setCopyMsg] = useState('')
 
-  // Build per-day slot map for the grid
   const daySlots = useMemo(() => {
     const slots = {}
     for (const agent of agents) {
@@ -35,7 +35,6 @@ export default function SchedulePage() {
     return slots
   }, [agents, weekSchedule, activeDay])
 
-  // Compute coverage for active day
   const { phoneCov, emailCov } = useMemo(() => {
     const agentDaySlots = {}
     for (const agent of agents) {
@@ -44,7 +43,12 @@ export default function SchedulePage() {
     return computeCoverage(agentDaySlots)
   }, [agents, weekSchedule, activeDay])
 
-  // Per-day gap summary for day tabs
+  // Weekly SLA estimate
+  const weeklySLA = useMemo(() => {
+    if (!agents.length || !forecast.phoneForecast) return null
+    return estimateWeeklySLA(weekSchedule, agents, forecast.phoneForecast, forecast.emailForecast)
+  }, [agents, weekSchedule, forecast])
+
   const dayGaps = useMemo(() => {
     const gaps = {}
     for (const day of WEEKDAYS) {
@@ -72,16 +76,14 @@ export default function SchedulePage() {
   }
 
   const handleSaveAgent = async (form) => {
-    if (agentModal === 'new') {
-      await addAgent(form)
-    } else {
-      await updateAgent(agentModal.id, form)
-    }
+    if (agentModal === 'new') await addAgent(form)
+    else await updateAgent(agentModal.id, form)
     setAgentModal(null)
   }
 
-  const gapColor = { critical: 'text-red-400', warn: 'text-amber-400', ok: 'text-emerald-400', none: 'text-gray-600' }
   const gapDot = { critical: 'bg-red-500', warn: 'bg-amber-500', ok: 'bg-emerald-500', none: 'bg-gray-600' }
+
+  const slaColor = (pct) => pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
 
   return (
     <div className="min-h-screen bg-[#0C0F14] text-gray-200">
@@ -95,7 +97,6 @@ export default function SchedulePage() {
           </div>
         </div>
 
-        {/* Week nav */}
         <div className="flex items-center gap-2">
           <button onClick={goPrevWeek} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
             <ChevronLeft size={16} />
@@ -106,7 +107,6 @@ export default function SchedulePage() {
           </button>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2">
           {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
           {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
@@ -140,9 +140,42 @@ export default function SchedulePage() {
 
       <main className="p-6 space-y-6 max-w-[1400px] mx-auto">
 
-        {/* ── SCHEDULE TAB ── */}
         {activeTab === 'schedule' && (
           <>
+            {/* Weekly SLA cards */}
+            {weeklySLA && (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Est. phone SLA this week</div>
+                  <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.phoneSLA)}`}>
+                    {weeklySLA.phoneSLA}%
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
+                </div>
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Est. email SLA this week</div>
+                  <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.emailSLA)}`}>
+                    {weeklySLA.emailSLA}%
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
+                </div>
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Calls covered / expected</div>
+                  <div className="text-2xl font-mono font-medium text-gray-300">
+                    {weeklySLA.phoneTotalAnswered.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.phoneTotalExpected.toLocaleString()} expected</div>
+                </div>
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Emails covered / expected</div>
+                  <div className="text-2xl font-mono font-medium text-gray-300">
+                    {weeklySLA.emailTotalAnswered.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.emailTotalExpected.toLocaleString()} expected</div>
+                </div>
+              </div>
+            )}
+
             {/* Day tabs */}
             <div className="flex gap-2 flex-wrap">
               {WEEKDAYS.map(day => {
@@ -194,12 +227,15 @@ export default function SchedulePage() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-sm font-semibold text-white">Coverage Analysis</h2>
-                      <p className="text-xs text-gray-500 mt-0.5">Real-time gap detection vs forecast volume</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        SLA % = estimated calls/emails handled ÷ expected volume. Target: 95%.
+                        Hover any cell for detail.
+                      </p>
                     </div>
                     <div className="flex items-center gap-3 text-xs">
-                      <GapBadge status="ok">Covered</GapBadge>
-                      <GapBadge status="warn">Tight</GapBadge>
-                      <GapBadge status="critical">Gap</GapBadge>
+                      <GapBadge status="ok">≥80%</GapBadge>
+                      <GapBadge status="warn">50–80%</GapBadge>
+                      <GapBadge status="critical">&lt;50%</GapBadge>
                     </div>
                   </div>
                   <CoverageBar
@@ -222,7 +258,6 @@ export default function SchedulePage() {
           </>
         )}
 
-        {/* ── FORECAST TAB ── */}
         {activeTab === 'forecast' && (
           <ForecastChart
             phoneForecast={forecast.phoneForecast}
@@ -230,7 +265,6 @@ export default function SchedulePage() {
           />
         )}
 
-        {/* ── AGENTS TAB ── */}
         {activeTab === 'agents' && (
           <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-[#2A3245] flex items-center justify-between">
