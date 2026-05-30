@@ -1,4 +1,9 @@
+import { useState, useEffect } from 'react'
+import { RefreshCw } from 'lucide-react'
 import { hLabel, getPhoneGap, getEmailGap, PHONE_START, PHONE_END, WORK_START, WORK_END, AVG_EMAILS_PER_AGENT_HOUR } from '../lib/forecast'
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const GAP_COLORS = {
   critical: { bg: 'bg-red-900/70', text: 'text-red-300', border: 'border-red-700' },
@@ -14,13 +19,8 @@ const QUEUE_COLORS = {
   empty:    { bg: 'bg-[#111827]', text: 'text-gray-600', border: 'border-gray-800' },
 }
 
-function computeEmailQueue(hours, emailCov, emailForecast, day) {
-  // Start with overnight backlog (emails from midnight to WORK_START)
-  let queue = 0
-  for (let h = 0; h < WORK_START; h++) {
-    queue += emailForecast?.[day]?.[h] || 0
-  }
-
+function computeEmailQueue(hours, emailCov, emailForecast, day, startingQueue) {
+  let queue = startingQueue
   const queueByHour = {}
   for (const h of hours) {
     const incoming = emailForecast?.[day]?.[h] || 0
@@ -33,11 +33,59 @@ function computeEmailQueue(hours, emailCov, emailForecast, day) {
 }
 
 export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, day }) {
+  const [liveQueue, setLiveQueue] = useState(null)
+  const [fetchedAt, setFetchedAt] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const fetchLiveQueue = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/gorgias-queue`,
+        { headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+      )
+      const data = await res.json()
+      if (data.openEmailTickets !== undefined) {
+        setLiveQueue(data.openEmailTickets)
+        setFetchedAt(new Date(data.fetchedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }))
+      }
+    } catch (err) {
+      console.error('Failed to fetch live queue:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const hours = Array.from({ length: WORK_END - WORK_START }, (_, i) => i + WORK_START)
-  const queueByHour = computeEmailQueue(hours, emailCov, emailForecast, day)
+  const startingQueue = liveQueue ?? 0
+  const queueByHour = computeEmailQueue(hours, emailCov, emailForecast, day, startingQueue)
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
+
+      {/* Live queue fetch bar */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Live email queue:</span>
+          {liveQueue !== null ? (
+            <span className={`text-sm font-mono font-medium ${liveQueue > 20 ? 'text-red-400' : liveQueue > 10 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {liveQueue} open tickets
+            </span>
+          ) : (
+            <span className="text-xs text-gray-600 font-mono">not fetched yet</span>
+          )}
+          {fetchedAt && <span className="text-[10px] text-gray-600">as of {fetchedAt}</span>}
+        </div>
+        <button
+          onClick={fetchLiveQueue}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white rounded-lg transition-colors disabled:opacity-40"
+        >
+          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Fetching...' : 'Refresh'}
+        </button>
+      </div>
+
       {/* Phone coverage row */}
       <div className="flex items-center gap-1">
         <span className="text-[10px] text-gray-500 w-14 text-right shrink-0 font-mono">PHONES</span>
@@ -75,7 +123,7 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
         <div className="flex gap-0.5 flex-1">
           {hours.map(h => {
             const { queue, incoming, capacity, agentsOn } = queueByHour[h] || {}
-            const prevQueue = h > WORK_START ? (queueByHour[h-1]?.queue || 0) : 0
+            const prevQueue = h > WORK_START ? (queueByHour[h-1]?.queue || 0) : startingQueue
             let status = 'empty'
             if (agentsOn === 0 && incoming > 0) status = 'growing'
             else if (queue > prevQueue) status = 'growing'
@@ -87,7 +135,7 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
             return (
               <div
                 key={h}
-                title={`${hLabel(h)}: ${agentsOn} agent${agentsOn !== 1 ? 's' : ''} on email, ${incoming} incoming, queue: ${queue}`}
+                title={`${hLabel(h)}: ${agentsOn} on email, ${incoming} incoming, queue: ${queue}`}
                 className={`flex-1 h-7 rounded border ${c.bg} ${c.border} flex flex-col items-center justify-center cursor-default`}
               >
                 <span className={`text-[10px] font-mono font-medium ${c.text}`}>
@@ -112,7 +160,7 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
             return (
               <div
                 key={h}
-                title={`${hLabel(h)}: ${n} agent${n !== 1 ? 's' : ''} on email, ~${vol} tickets expected`}
+                title={`${hLabel(h)}: ${n} on email, ~${vol} tickets expected`}
                 className={`flex-1 h-7 rounded border ${c.bg} ${c.border} flex flex-col items-center justify-center cursor-default`}
               >
                 <span className={`text-[10px] font-mono font-medium ${c.text}`}>{n > 0 ? n : ''}</span>
