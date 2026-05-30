@@ -23,12 +23,12 @@ function cycleActivity(current, agentRole) {
   return allowed[(idx + 1) % allowed.length]
 }
 
-export function ScheduleGrid({ agents, daySlots, day, onUpdateSlot }) {
+export function ScheduleGrid({ agents, daySlots, day, onUpdateSlot, onMarkOff, onUnmarkOff }) {
   const hours = Array.from({ length: WORK_END - WORK_START }, (_, i) => i + WORK_START)
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse" style={{ minWidth: `${160 + hours.length * 36 + 120}px` }}>
+      <table className="w-full border-collapse" style={{ minWidth: `${160 + hours.length * 36 + 180}px` }}>
         <thead>
           <tr>
             <th className="text-left pb-2 pr-3 w-28">
@@ -53,12 +53,16 @@ export function ScheduleGrid({ agents, daySlots, day, onUpdateSlot }) {
             <th className="pb-2 px-1 text-center w-14">
               <span className="text-[9px] text-gray-600 font-mono uppercase tracking-wider">Total</span>
             </th>
+            <th className="pb-2 px-2 text-center w-16">
+              <span className="text-[9px] text-gray-600 font-mono uppercase tracking-wider">Off</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {agents.map((agent, agentIdx) => {
             const slots = daySlots[agent.id] || {}
             const isOff = slots.off
+
             let phoneHrs = 0, emailHrs = 0
             if (!isOff) {
               hours.forEach(h => {
@@ -70,6 +74,7 @@ export function ScheduleGrid({ agents, daySlots, day, onUpdateSlot }) {
 
             return (
               <tr key={agent.id} className={`${agentIdx % 2 === 0 ? '' : 'bg-white/[0.02]'} group`}>
+                {/* Agent name */}
                 <td className="pr-3 py-0.5">
                   <div className="flex items-center gap-2">
                     <div
@@ -81,6 +86,8 @@ export function ScheduleGrid({ agents, daySlots, day, onUpdateSlot }) {
                     <span className="text-xs text-gray-300 font-medium truncate">{agent.name}</span>
                   </div>
                 </td>
+
+                {/* Hour cells */}
                 {hours.map(h => {
                   const inPhone = h >= PHONE_START && h < PHONE_END
                   if (isOff) {
@@ -105,20 +112,41 @@ export function ScheduleGrid({ agents, daySlots, day, onUpdateSlot }) {
                     </td>
                   )
                 })}
+
+                {/* Phone hours */}
                 <td className="pl-3 py-0.5 text-center">
                   <span className={`text-[11px] font-mono font-medium ${phoneHrs > 0 ? 'text-emerald-400' : 'text-gray-700'}`}>
                     {isOff ? '–' : `${phoneHrs}h`}
                   </span>
                 </td>
+
+                {/* Email hours */}
                 <td className="px-1 py-0.5 text-center">
                   <span className={`text-[11px] font-mono font-medium ${emailHrs > 0 ? 'text-blue-400' : 'text-gray-700'}`}>
                     {isOff ? '–' : `${emailHrs}h`}
                   </span>
                 </td>
+
+                {/* Total hours */}
                 <td className="px-1 py-0.5 text-center">
                   <span className={`text-[11px] font-mono font-medium ${totalHrs > 0 ? 'text-gray-300' : 'text-gray-700'}`}>
                     {isOff ? 'OFF' : `${totalHrs}h`}
                   </span>
+                </td>
+
+                {/* Off toggle */}
+                <td className="px-2 py-0.5 text-center">
+                  <button
+                    onClick={() => isOff ? onUnmarkOff(agent.id) : onMarkOff(agent.id)}
+                    title={isOff ? `Mark ${agent.name} as working` : `Mark ${agent.name} as off`}
+                    className={`px-2 py-1 rounded text-[9px] font-medium transition-all ${
+                      isOff
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-[#1A1F2E] text-gray-600 hover:bg-red-900/40 hover:text-red-400'
+                    }`}
+                  >
+                    {isOff ? 'Unset' : 'Off'}
+                  </button>
                 </td>
               </tr>
             )
