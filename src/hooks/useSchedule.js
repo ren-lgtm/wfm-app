@@ -122,6 +122,44 @@ export function useSchedule() {
         { onConflict: 'week_start,agent_id,day_of_week' })
   }, [currentMonday])
 
+  // Unmark agent as off (clear the day)
+  const unmarkOff = useCallback(async (agentId, day) => {
+    const weekStart = toISODate(currentMonday)
+    setWeekSchedule(prev => ({
+      ...prev,
+      [agentId]: { ...prev[agentId], [day]: {} }
+    }))
+    await supabase.from('schedules')
+      .upsert({ week_start: weekStart, agent_id: agentId, day_of_week: day, is_off: false },
+        { onConflict: 'week_start,agent_id,day_of_week' })
+  }, [currentMonday])
+
+  // Day notes
+  const [dayNotes, setDayNotes] = useState({}) // { 'Mon': 'Dolly out', ... }
+
+  const loadDayNotes = useCallback(async (monday) => {
+    const weekStart = toISODate(monday)
+    const { data } = await supabase
+      .from('day_notes')
+      .select('day_of_week, note')
+      .eq('week_start', weekStart)
+    if (data) {
+      const notes = {}
+      data.forEach(r => { notes[r.day_of_week] = r.note })
+      setDayNotes(notes)
+    }
+  }, [])
+
+  useEffect(() => { loadDayNotes(currentMonday) }, [currentMonday, loadDayNotes])
+
+  const updateDayNote = useCallback(async (day, note) => {
+    const weekStart = toISODate(currentMonday)
+    setDayNotes(prev => ({ ...prev, [day]: note }))
+    await supabase.from('day_notes')
+      .upsert({ week_start: weekStart, day_of_week: day, note },
+        { onConflict: 'week_start,day_of_week' })
+  }, [currentMonday])
+
   // Copy last week's schedule into current week
   const copyLastWeek = useCallback(async () => {
     const lastMonday = new Date(currentMonday)
@@ -217,7 +255,8 @@ export function useSchedule() {
 
   return {
     agents, currentMonday, weekSchedule, forecast, slaData, loading, saving,
-    updateSlot, markOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
+    dayNotes, updateDayNote,
+    updateSlot, markOff, unmarkOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
     goToWeek, goNextWeek, goPrevWeek, getSlots, getAgentWeekHours,
   }
 }
