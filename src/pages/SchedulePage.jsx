@@ -102,38 +102,6 @@ export default function SchedulePage() {
       const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
       const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-      // Build schedule summary for Slack
-      const weekLabel = formatWeekLabel(currentMonday)
-      let lines = [`*📅 CX Schedule — ${weekLabel}*`]
-
-      for (const day of WEEKDAYS) {
-        lines.push(`\n*${day}*`)
-        const note = dayNotes[day]
-        if (note) lines.push(`_${note}_`)
-
-        for (const agent of agents) {
-          const slots = weekSchedule[agent.id]?.[day] || {}
-          if (slots.off) {
-            lines.push(`• ${agent.name}: OFF`)
-            continue
-          }
-          let phoneHrs = 0, emailHrs = 0
-          Object.values(slots).forEach(a => {
-            if (a === 'phone') phoneHrs++
-            if (a === 'email') emailHrs++
-          })
-          if (phoneHrs === 0 && emailHrs === 0) continue
-          const parts = []
-          if (phoneHrs > 0) parts.push(`📞 ${phoneHrs}h phones`)
-          if (emailHrs > 0) parts.push(`✉ ${emailHrs}h email`)
-          lines.push(`• ${agent.name}: ${parts.join(', ')}`)
-        }
-      }
-
-      if (weeklySLA) {
-        lines.push(`\n*Est. SLA this week:* 📞 ${weeklySLA.phoneSLA}% · ✉ ${weeklySLA.emailSLA}%`)
-      }
-
       const res = await fetch(`${SUPABASE_URL}/functions/v1/slack-schedule`, {
         method: 'POST',
         headers: {
@@ -141,40 +109,40 @@ export default function SchedulePage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-        weekLabel: formatWeekLabel(currentMonday),
-        phoneSLA: weeklySLA?.phoneSLA || 0,
-        emailSLA: weeklySLA?.emailSLA || 0,
-        days: WEEKDAYS.map(day => {
-          const agentDaySlots = {}
-          for (const agent of agents) {
-            agentDaySlots[agent.id] = weekSchedule[agent.id]?.[day] || {}
-          }
-          const { phoneCov: pc, emailCov: ec } = computeCoverage(agentDaySlots)
-          let gap = 'ok'
-          for (let h = 12; h < 19; h++) {
-            const pg = getPhoneGap(pc[h] || 0, forecast.phoneForecast[day]?.[h] || 0)
-            if (pg === 'critical') { gap = 'critical'; break }
-            if (pg === 'warn') gap = 'warn'
-          }
-          return {
-            day,
-            note: dayNotes[day] || null,
-            gap,
-            agents: agents.map(agent => {
-              const slots = weekSchedule[agent.id]?.[day] || {}
-              const isOff = !!slots.off
-              let phoneHrs = 0, emailHrs = 0
-              if (!isOff) {
-                Object.values(slots).forEach(a => {
-                  if (a === 'phone') phoneHrs++
-                  if (a === 'email') emailHrs++
-                })
-              }
-              return { name: agent.name, phoneHrs, emailHrs, isOff }
-            }).filter(a => a.isOff || a.phoneHrs > 0 || a.emailHrs > 0)
-          }
+          weekLabel: formatWeekLabel(currentMonday),
+          phoneSLA: weeklySLA?.phoneSLA || 0,
+          emailSLA: weeklySLA?.emailSLA || 0,
+          days: WEEKDAYS.map(day => {
+            const agentDaySlots = {}
+            for (const agent of agents) {
+              agentDaySlots[agent.id] = weekSchedule[agent.id]?.[day] || {}
+            }
+            const { phoneCov: pc } = computeCoverage(agentDaySlots)
+            let gap = 'ok'
+            for (let h = 12; h < 19; h++) {
+              const pg = getPhoneGap(pc[h] || 0, forecast.phoneForecast[day]?.[h] || 0)
+              if (pg === 'critical') { gap = 'critical'; break }
+              if (pg === 'warn') gap = 'warn'
+            }
+            return {
+              day,
+              note: dayNotes[day] || null,
+              gap,
+              agents: agents.map(agent => {
+                const slots = weekSchedule[agent.id]?.[day] || {}
+                const isOff = !!slots.off
+                let phoneHrs = 0, emailHrs = 0
+                if (!isOff) {
+                  Object.values(slots).forEach(a => {
+                    if (a === 'phone') phoneHrs++
+                    if (a === 'email') emailHrs++
+                  })
+                }
+                return { name: agent.name, phoneHrs, emailHrs, isOff }
+              }).filter(a => a.isOff || a.phoneHrs > 0 || a.emailHrs > 0)
+            }
+          })
         })
-      })
       })
 
       if (res.ok) {
@@ -189,7 +157,6 @@ export default function SchedulePage() {
       setTimeout(() => setSlackMsg(''), 4000)
     }
   }
-
   const gapDot = { critical: 'bg-red-500', warn: 'bg-amber-500', ok: 'bg-emerald-500', none: 'bg-gray-600' }
   const slaColor = (pct) => pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
 
