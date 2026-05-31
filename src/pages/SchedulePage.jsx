@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Plus, Users, BarChart2, Calendar, MessageSquare } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Plus, Users, BarChart2, Calendar, MessageSquare, LayoutGrid } from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
 import { ScheduleGrid } from '../components/ScheduleGrid'
 import { CoverageBar } from '../components/CoverageBar'
@@ -10,17 +10,88 @@ import { GapBadge } from '../components/GapBadge'
 import {
   DAYS, formatWeekLabel, computeCoverage,
   getPhoneGap, getEmailGap, PHONE_START, PHONE_END,
-  estimateWeeklySLA
+  estimateWeeklySLA, toISODate, getMondayOfWeek
 } from '../lib/forecast'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+
+function MultiWeekView({ agents, currentMonday, goToWeek, setActiveTab, setActiveDay, forecast }) {
+  // Show 4 weeks starting from current
+  const weeks = Array.from({ length: 4 }, (_, i) => {
+    const mon = new Date(currentMonday)
+    mon.setDate(mon.getDate() + i * 7)
+    return mon
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-white">4-Week Overview</h2>
+        <p className="text-xs text-gray-500">Click any day to jump to that week's schedule</p>
+      </div>
+
+      {weeks.map((monday, wi) => {
+        const weekLabel = formatWeekLabel(monday)
+        return (
+          <div key={wi} className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
+            {/* Week header */}
+            <div className="px-5 py-3 border-b border-[#2A3245] flex items-center justify-between">
+              <span className="text-xs font-medium text-white font-mono">{weekLabel}</span>
+              <button
+                onClick={() => { goToWeek(monday); setActiveTab('schedule') }}
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Open week →
+              </button>
+            </div>
+
+            {/* Day columns */}
+            <div className="grid grid-cols-5 divide-x divide-[#2A3245]">
+              {WEEKDAYS.map(day => {
+                const dayDate = new Date(monday)
+                dayDate.setDate(dayDate.getDate() + ['Mon','Tue','Wed','Thu','Fri'].indexOf(day))
+                const dateNum = dayDate.getDate()
+                const month = dayDate.toLocaleDateString('en-US', { month: 'short' })
+
+                return (
+                  <button
+                    key={day}
+                    onClick={() => { goToWeek(monday); setActiveDay(day); setActiveTab('schedule') }}
+                    className="p-3 text-left hover:bg-[#2A3245]/40 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-medium text-gray-400">{day}</span>
+                      <span className="text-[10px] text-gray-600 font-mono">{month} {dateNum}</span>
+                    </div>
+
+                    {/* Agent pills */}
+                    <div className="space-y-1">
+                      {agents.slice(0, 5).map(agent => {
+                        return (
+                          <div key={agent.id} className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: agent.color }} />
+                            <span className="text-[9px] text-gray-500 truncate">{agent.name}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function SchedulePage() {
   const {
     agents, currentMonday, weekSchedule, forecast, slaData, loading, saving,
     dayNotes, updateDayNote,
     updateSlot, markOff, unmarkOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
-    goNextWeek, goPrevWeek, getAgentWeekHours
+    goNextWeek, goPrevWeek, goToWeek, getAgentWeekHours
   } = useSchedule()
 
   const [activeDay, setActiveDay] = useState('Mon')
@@ -157,13 +228,15 @@ export default function SchedulePage() {
       setTimeout(() => setSlackMsg(''), 4000)
     }
   }
+
   const gapDot = { critical: 'bg-red-500', warn: 'bg-amber-500', ok: 'bg-emerald-500', none: 'bg-gray-600' }
   const slaColor = (pct) => pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
 
   return (
     <div className="min-h-screen bg-[#0C0F14] text-gray-200">
-      {/* Header */}
-      <header className="border-b border-[#1A1F2E] px-6 py-4 flex items-center justify-between flex-wrap gap-3">
+
+      {/* Header — app name + week nav only */}
+      <header className="border-b border-[#1A1F2E] px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">W</div>
           <div>
@@ -182,24 +255,7 @@ export default function SchedulePage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
-          {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
-          {slackMsg && <span className={`text-xs font-mono ${slackMsg.includes('Posted') ? 'text-emerald-400' : 'text-red-400'}`}>{slackMsg}</span>}
-          <button
-            onClick={handleCopyLastWeek}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors"
-          >
-            <Copy size={13} /> Copy last week
-          </button>
-          <button
-            onClick={handleSlackPost}
-            disabled={slackLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#4A154B] hover:bg-[#611f69] text-gray-200 hover:text-white transition-colors disabled:opacity-40"
-          >
-            <MessageSquare size={13} /> {slackLoading ? 'Posting...' : 'Post to Slack'}
-          </button>
-        </div>
+        <div className="w-24" /> {/* spacer to keep nav centered */}
       </header>
 
       {/* Tab nav */}
@@ -207,6 +263,7 @@ export default function SchedulePage() {
         <div className="flex gap-0">
           {[
             { id: 'schedule', icon: Calendar, label: 'Schedule' },
+            { id: 'multiweek', icon: LayoutGrid, label: '4-Week View' },
             { id: 'forecast', icon: BarChart2, label: 'Forecast' },
             { id: 'agents', icon: Users, label: 'Agents' },
           ].map(({ id, icon: Icon, label }) => (
@@ -223,8 +280,37 @@ export default function SchedulePage() {
 
       <main className="p-6 space-y-6 max-w-[1400px] mx-auto">
 
+        {/* ── SCHEDULE TAB ── */}
         {activeTab === 'schedule' && (
           <>
+            {/* Week date + actions bar */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-white">{formatWeekLabel(currentMonday)}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {new Date(currentMonday).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
+                {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
+                {slackMsg && <span className={`text-xs font-mono ${slackMsg.includes('Posted') ? 'text-emerald-400' : 'text-red-400'}`}>{slackMsg}</span>}
+                <button
+                  onClick={handleCopyLastWeek}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors"
+                >
+                  <Copy size={13} /> Copy last week
+                </button>
+                <button
+                  onClick={handleSlackPost}
+                  disabled={slackLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#4A154B] hover:bg-[#611f69] text-gray-200 hover:text-white transition-colors disabled:opacity-40"
+                >
+                  <MessageSquare size={13} /> {slackLoading ? 'Posting...' : 'Post to Slack'}
+                </button>
+              </div>
+            </div>
+
             {/* Weekly SLA cards */}
             {weeklySLA && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -256,6 +342,10 @@ export default function SchedulePage() {
               {WEEKDAYS.map(day => {
                 const gap = dayGaps[day] || 'ok'
                 const note = dayNotes[day]
+                const dayDate = new Date(currentMonday)
+                dayDate.setDate(dayDate.getDate() + WEEKDAYS.indexOf(day))
+                const dateNum = dayDate.getDate()
+                const month = dayDate.toLocaleDateString('en-US', { month: 'short' })
                 return (
                   <button
                     key={day}
@@ -266,7 +356,8 @@ export default function SchedulePage() {
                         : 'bg-[#141922] border-[#2A3245] text-gray-400 hover:text-white hover:border-[#3D4A6B]'
                     }`}
                   >
-                    {day}
+                    <span>{day}</span>
+                    <span className="text-[10px] text-gray-500 font-mono">{month} {dateNum}</span>
                     {note && <span className="text-[9px] text-amber-400">📝</span>}
                     <span className={`w-1.5 h-1.5 rounded-full ${gapDot[gap]}`} />
                   </button>
@@ -282,7 +373,7 @@ export default function SchedulePage() {
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
                     <div>
-                      <h2 className="text-sm font-semibold text-white">{activeDay} Schedule</h2>
+                      <h2 className="text-sm font-semibold text-white">{activeDay} · {(() => { const d = new Date(currentMonday); d.setDate(d.getDate() + WEEKDAYS.indexOf(activeDay)); return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) })()}</h2>
                       <p className="text-xs text-gray-500 mt-0.5">Click any cell to cycle: Phone → Email → Lunch → Off → Empty</p>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-gray-500">
@@ -364,6 +455,19 @@ export default function SchedulePage() {
           </>
         )}
 
+        {/* ── MULTI-WEEK TAB ── */}
+        {activeTab === 'multiweek' && (
+          <MultiWeekView
+            agents={agents}
+            currentMonday={currentMonday}
+            goToWeek={goToWeek}
+            setActiveTab={setActiveTab}
+            setActiveDay={setActiveDay}
+            forecast={forecast}
+          />
+        )}
+
+        {/* ── FORECAST TAB ── */}
         {activeTab === 'forecast' && (
           <ForecastChart
             phoneForecast={forecast.phoneForecast}
@@ -372,6 +476,7 @@ export default function SchedulePage() {
           />
         )}
 
+        {/* ── AGENTS TAB ── */}
         {activeTab === 'agents' && (
           <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-[#2A3245] flex items-center justify-between">
