@@ -86,7 +86,7 @@ function MultiWeekView({ agents, currentMonday, goToWeek, setActiveTab, setActiv
   )
 }
 
-export default function SchedulePage() {
+export default function SchedulePage({ theme, toggleTheme }) {
   const {
     agents, currentMonday, weekSchedule, forecast, slaData, loading, saving,
     dayNotes, updateDayNote,
