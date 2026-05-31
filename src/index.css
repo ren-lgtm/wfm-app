@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── BASE VARIABLES ── */
 :root {
   --phone: #059669;
   --phone-bg: #ECFDF5;
@@ -12,6 +13,29 @@
   --off: #9CA3AF;
   --off-bg: #F9FAFB;
 }
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg-primary, #0C0F14);
+  color: var(--text-primary, #E8EAF0);
+  font-family: 'DM Sans', sans-serif;
+  margin: 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary, #1A1F2E); }
+::-webkit-scrollbar-thumb { background: var(--bg-hover, #2E3650); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-tertiary, #3D4A6B); }
+
+/* ── CELL STYLES ── */
+.cell-phone { background: var(--cell-phone-bg); color: var(--cell-phone-text); border: 1px solid var(--cell-phone-border); }
+.cell-email { background: var(--cell-email-bg); color: var(--cell-email-text); border: 1px solid var(--cell-email-border); }
+.cell-lunch { background: var(--cell-lunch-bg); color: var(--cell-lunch-text); border: 1px solid var(--cell-lunch-border); }
+.cell-off   { background: var(--cell-off-bg); color: var(--cell-off-text); border: 1px solid var(--cell-off-border); }
+.cell-empty { background: transparent; border: 1px solid var(--border-primary, #1F2937); }
 
 /* ── DARK MODE (default) ── */
 :root, [data-theme="dark"] {
@@ -41,95 +65,106 @@
 
 /* ── LIGHT MODE ── */
 [data-theme="light"] {
-  --bg-primary: #F8F9FC;
+  --bg-primary: #F4F6FA;
   --bg-secondary: #FFFFFF;
-  --bg-tertiary: #F1F3F7;
-  --bg-hover: #E8ECF4;
+  --bg-tertiary: #EEF1F7;
+  --bg-hover: #E2E7F0;
   --border-primary: #E2E6EF;
   --border-secondary: #D0D6E4;
   --border-tertiary: #B0BCCE;
   --text-primary: #0F1523;
-  --text-secondary: #4A5568;
-  --text-tertiary: #8896A8;
-  --cell-phone-bg: #DCFCE7;
-  --cell-phone-text: #166534;
-  --cell-phone-border: #86EFAC;
+  --text-secondary: #3D4A5C;
+  --text-tertiary: #6B7A8D;
+  --cell-phone-bg: #D1FAE5;
+  --cell-phone-text: #065F46;
+  --cell-phone-border: #6EE7B7;
   --cell-email-bg: #DBEAFE;
-  --cell-email-text: #1E40AF;
+  --cell-email-text: #1E3A8A;
   --cell-email-border: #93C5FD;
   --cell-lunch-bg: #FEF3C7;
-  --cell-lunch-text: #92400E;
+  --cell-lunch-text: #78350F;
   --cell-lunch-border: #FCD34D;
   --cell-off-bg: #F1F5F9;
   --cell-off-text: #94A3B8;
   --cell-off-border: #CBD5E1;
 }
 
-/* ── LIGHT MODE TEXT FIXES ── */
+/* ── LIGHT MODE OVERRIDES ── */
+/* Backgrounds */
+[data-theme="light"] body,
+[data-theme="light"] .min-h-screen { background: #F4F6FA !important; color: #0F1523 !important; }
+
+[data-theme="light"] [class*="bg-\[#0C0F14\]"] { background: #FFFFFF !important; }
+[data-theme="light"] [class*="bg-\[#141922\]"] { background: #FFFFFF !important; }
+[data-theme="light"] [class*="bg-\[#1A1F2E\]"] { background: #EEF1F7 !important; }
+[data-theme="light"] [class*="bg-\[#2A3245\]"] { background: #E2E7F0 !important; }
+[data-theme="light"] [class*="bg-\[#0C0F14\]\/30"] { background: #F4F6FA !important; }
+[data-theme="light"] [class*="bg-\[#0C0F14\]\/40"] { background: #EEF1F7 !important; }
+
+/* Borders */
+[data-theme="light"] [class*="border-\[#1A1F2E\]"] { border-color: #D0D6E4 !important; }
+[data-theme="light"] [class*="border-\[#2A3245\]"] { border-color: #D0D6E4 !important; }
+[data-theme="light"] [class*="border-\[#3D4A6B\]"] { border-color: #B0BCCE !important; }
+[data-theme="light"] [class*="divide-\[#2A3245\]"] > * { border-color: #D0D6E4 !important; }
+
+/* Text */
 [data-theme="light"] [class*="text-white"] { color: #0F1523 !important; }
+[data-theme="light"] [class*="text-gray-200"] { color: #1A202C !important; }
+[data-theme="light"] [class*="text-gray-300"] { color: #2D3748 !important; }
+[data-theme="light"] [class*="text-gray-400"] { color: #4A5568 !important; }
+[data-theme="light"] [class*="text-gray-500"] { color: #4A5568 !important; }
+[data-theme="light"] [class*="text-gray-600"] { color: #718096 !important; }
+[data-theme="light"] [class*="text-gray-700"] { color: #718096 !important; }
 
-[data-theme="light"] [class*="font-mono"][class*="text-white"],
-[data-theme="light"] span[class*="font-mono"] { color: #0F1523 !important; }
+/* Colored text — keep readable */
+[data-theme="light"] .text-blue-400,
+[data-theme="light"] [class*="text-blue-400"] { color: #1D4ED8 !important; }
+[data-theme="light"] .text-blue-300,
+[data-theme="light"] [class*="text-blue-300"] { color: #2563EB !important; }
+[data-theme="light"] .text-emerald-400,
+[data-theme="light"] [class*="text-emerald-400"] { color: #047857 !important; }
+[data-theme="light"] .text-emerald-300,
+[data-theme="light"] [class*="text-emerald-300"] { color: #065F46 !important; }
+[data-theme="light"] .text-red-400,
+[data-theme="light"] [class*="text-red-400"] { color: #B91C1C !important; }
+[data-theme="light"] .text-red-300,
+[data-theme="light"] [class*="text-red-300"] { color: #991B1B !important; }
+[data-theme="light"] .text-amber-400,
+[data-theme="light"] [class*="text-amber-400"] { color: #92400E !important; }
+[data-theme="light"] .text-amber-300,
+[data-theme="light"] [class*="text-amber-300"] { color: #78350F !important; }
 
-/* Keep colored SLA text readable */
-[data-theme="light"] .text-red-400 { color: #B91C1C !important; }
-[data-theme="light"] .text-emerald-400 { color: #065F46 !important; }
-[data-theme="light"] .text-amber-400 { color: #92400E !important; }
-[data-theme="light"] .text-blue-400 { color: #1D4ED8 !important; }
-[data-theme="light"] .text-blue-300 { color: #1D4ED8 !important; }
+/* Hover states */
+[data-theme="light"] [class*="hover\:bg-\[#1A1F2E\]"]:hover { background: #EEF1F7 !important; }
+[data-theme="light"] [class*="hover\:bg-\[#2A3245\]"]:hover { background: #E2E7F0 !important; }
+[data-theme="light"] [class*="hover\:text-white"]:hover { color: #0F1523 !important; }
 
-/* Nav arrows */
-[data-theme="light"] .text-gray-400 { color: #4A5568 !important; }
+/* Slack button — keep purple */
+[data-theme="light"] [class*="bg-\[#4A154B\]"] { background: #4A154B !important; color: #FFFFFF !important; }
+[data-theme="light"] [class*="hover\:bg-\[#611f69\]"]:hover { background: #611f69 !important; color: #FFFFFF !important; }
 
-/* Post to Slack button */
-[data-theme="light"] [class*="bg-\[#4A154B\]"] { 
-  background: #4A154B !important; 
-  color: #FFFFFF !important; 
-}
-[data-theme="light"] [class*="bg-\[#611f69\]"] { 
-  background: #611f69 !important; 
-  color: #FFFFFF !important; 
-}
-
-/* Coverage bar cell text */
-[data-theme="light"] .text-red-300 { color: #991B1B !important; }
-[data-theme="light"] .text-emerald-300 { color: #064E3B !important; }
-[data-theme="light"] .text-amber-300 { color: #78350F !important; }
-
-/* Tab nav active */
-[data-theme="light"] .text-blue-400 { color: #1D4ED8 !important; }
+/* Blue active tab */
 [data-theme="light"] [class*="border-blue-500"] { border-color: #2563EB !important; }
 
-/* 4-week view agent names */
-[data-theme="light"] [class*="text-gray-500"] { color: #374151 !important; }
-[data-theme="light"] [class*="text-gray-600"] { color: #4B5563 !important; }
+/* Coverage bar colored cells — keep their colors */
+[data-theme="light"] [class*="bg-red-900"] { background: #FEE2E2 !important; }
+[data-theme="light"] [class*="bg-amber-900"] { background: #FEF3C7 !important; }
+[data-theme="light"] [class*="bg-emerald-900"] { background: #D1FAE5 !important; }
+[data-theme="light"] [class*="border-red-700"] { border-color: #FCA5A5 !important; }
+[data-theme="light"] [class*="border-amber-700"] { border-color: #FCD34D !important; }
+[data-theme="light"] [class*="border-emerald-700"] { border-color: #6EE7B7 !important; }
 
-/* Blue phone hours label */
-[data-theme="light"] [class*="text-blue-400"] { color: #1D4ED8 !important; }
+/* Phone hours blue band */
+[data-theme="light"] [class*="bg-blue-950"] { background: #EFF6FF !important; }
 
-/* Weekly summary alternating rows */
-[data-theme="light"] [class*="bg-\[#0C0F14\]\/30"] { background: #F0F4F8 !important; }
+/* Cell empty border */
+[data-theme="light"] .cell-empty { border-color: #D0D6E4 !important; }
 
-/* Font mono numbers */
-[data-theme="light"] [class*="text-gray-300"] { color: #1A202C !important; }
+/* Font mono on dark bg cards */
+[data-theme="light"] [class*="bg-\[#0C0F14\]"] [class*="font-mono"] { color: #0F1523 !important; }
 
-* { box-sizing: border-box; }
+/* Input fields */
+[data-theme="light"] [class*="bg-\[#0C0F14\]"] input { background: #F4F6FA !important; color: #0F1523 !important; border-color: #D0D6E4 !important; }
 
-body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'DM Sans', sans-serif;
-  margin: 0;
-  transition: background 0.2s, color 0.2s;
-}
-
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-secondary); }
-::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-tertiary); }
-
-.cell-phone  { background: var(--cell-phone-bg); color: var(--cell-phone-text); border: 1px solid var(--cell-phone-border); }
-.cell-email  { background: var(--cell-email-bg); color: var(--cell-email-text); border: 1px solid var(--cell-email-border); }
-.cell-lunch  { background: var(--cell-lunch-bg); color: var(--cell-lunch-text); border: 1px solid var(--cell-lunch-border); }
-.cell-off    { background: var(--cell-off-bg); color: var(--cell-off-text); border: 1px solid var(--cell-off-border); }
-.cell-empty  { background: transparent; border: 1px solid var(--border-primary); }
+/* WFM logo button stays blue */
+[data-theme="light"] .bg-blue-600 { background: #2563EB !important; color: #FFFFFF !important; }
