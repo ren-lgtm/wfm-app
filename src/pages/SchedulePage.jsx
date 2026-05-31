@@ -236,7 +236,7 @@ export default function SchedulePage() {
     <div className="min-h-screen bg-[#0C0F14] text-gray-200">
 
       {/* Header — app name + week nav only */}
-      <header className="border-b border-[#1A1F2E] px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-[#1A1F2E] px-6 py-4 flex items-center">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">W</div>
           <div>
@@ -244,18 +244,6 @@ export default function SchedulePage() {
             <p className="text-[10px] text-gray-500 mt-0.5">CX Staffing</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button onClick={goPrevWeek} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
-            <ChevronLeft size={16} />
-          </button>
-          <span className="text-sm font-medium text-white font-mono px-2">{formatWeekLabel(currentMonday)}</span>
-          <button onClick={goNextWeek} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
-            <ChevronRight size={16} />
-          </button>
-        </div>
-
-        <div className="w-24" /> {/* spacer to keep nav centered */}
       </header>
 
       {/* Tab nav */}
@@ -286,10 +274,18 @@ export default function SchedulePage() {
             {/* Week date + actions bar */}
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
+                <div className="flex items-center gap-2 mb-1">
+                <button onClick={goPrevWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                  <ChevronLeft size={15} />
+                </button>
                 <h2 className="text-base font-semibold text-white">{formatWeekLabel(currentMonday)}</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {new Date(currentMonday).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                </p>
+                <button onClick={goNextWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                {new Date(currentMonday).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
