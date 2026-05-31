@@ -235,15 +235,22 @@ export default function SchedulePage() {
   return (
     <div className="min-h-screen bg-[#0C0F14] text-gray-200">
 
-      {/* Header — app name + week nav only */}
-      <header className="border-b border-[#1A1F2E] px-6 py-4 flex items-center">
+      <header className="border-b border-[#1A1F2E] px-6 py-4 flex items-center justify-between" style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-secondary)' }}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">W</div>
           <div>
-            <h1 className="text-sm font-semibold text-white leading-none">WFM</h1>
-            <p className="text-[10px] text-gray-500 mt-0.5">CX Staffing</p>
+            <h1 className="text-sm font-semibold leading-none" style={{ color: 'var(--text-primary)' }}>WFM</h1>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>CX Staffing</p>
           </div>
         </div>
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg transition-colors text-sm"
+          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
       </header>
 
       {/* Tab nav */}
