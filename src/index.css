@@ -65,40 +65,53 @@
   --cell-off-border: #CBD5E1;
 }
 
-/* Force light mode backgrounds on hardcoded dark classes */
-[data-theme="light"] body,
-[data-theme="light"] .min-h-screen { background: #F8F9FC !important; }
+/* ── LIGHT MODE TEXT FIXES ── */
+[data-theme="light"] [class*="text-white"] { color: #0F1523 !important; }
 
-[data-theme="light"] [class*="bg-\[#0C0F14\]"],
-[data-theme="light"] [class*="bg-\[#141922\]"],
-[data-theme="light"] [class*="bg-\[#1A1F2E\]"] { background: #FFFFFF !important; }
+[data-theme="light"] [class*="font-mono"][class*="text-white"],
+[data-theme="light"] span[class*="font-mono"] { color: #0F1523 !important; }
 
-[data-theme="light"] [class*="bg-\[#2A3245\]"],
-[data-theme="light"] [class*="bg-\[#3D4A6B\]"] { background: #F1F3F7 !important; }
+/* Keep colored SLA text readable */
+[data-theme="light"] .text-red-400 { color: #B91C1C !important; }
+[data-theme="light"] .text-emerald-400 { color: #065F46 !important; }
+[data-theme="light"] .text-amber-400 { color: #92400E !important; }
+[data-theme="light"] .text-blue-400 { color: #1D4ED8 !important; }
+[data-theme="light"] .text-blue-300 { color: #1D4ED8 !important; }
 
-[data-theme="light"] [class*="border-\[#1A1F2E\]"],
-[data-theme="light"] [class*="border-\[#2A3245\]"] { border-color: #D0D6E4 !important; }
+/* Nav arrows */
+[data-theme="light"] .text-gray-400 { color: #4A5568 !important; }
 
-[data-theme="light"] [class*="text-gray-200"],
+/* Post to Slack button */
+[data-theme="light"] [class*="bg-\[#4A154B\]"] { 
+  background: #4A154B !important; 
+  color: #FFFFFF !important; 
+}
+[data-theme="light"] [class*="bg-\[#611f69\]"] { 
+  background: #611f69 !important; 
+  color: #FFFFFF !important; 
+}
+
+/* Coverage bar cell text */
+[data-theme="light"] .text-red-300 { color: #991B1B !important; }
+[data-theme="light"] .text-emerald-300 { color: #064E3B !important; }
+[data-theme="light"] .text-amber-300 { color: #78350F !important; }
+
+/* Tab nav active */
+[data-theme="light"] .text-blue-400 { color: #1D4ED8 !important; }
+[data-theme="light"] [class*="border-blue-500"] { border-color: #2563EB !important; }
+
+/* 4-week view agent names */
+[data-theme="light"] [class*="text-gray-500"] { color: #374151 !important; }
+[data-theme="light"] [class*="text-gray-600"] { color: #4B5563 !important; }
+
+/* Blue phone hours label */
+[data-theme="light"] [class*="text-blue-400"] { color: #1D4ED8 !important; }
+
+/* Weekly summary alternating rows */
+[data-theme="light"] [class*="bg-\[#0C0F14\]\/30"] { background: #F0F4F8 !important; }
+
+/* Font mono numbers */
 [data-theme="light"] [class*="text-gray-300"] { color: #1A202C !important; }
-
-[data-theme="light"] [class*="text-gray-400"],
-[data-theme="light"] [class*="text-gray-500"] { color: #4A5568 !important; }
-
-[data-theme="light"] [class*="text-gray-600"],
-[data-theme="light"] [class*="text-gray-700"] { color: #718096 !important; }
-
-[data-theme="light"] [class*="hover\:bg-\[#1A1F2E\]"]:hover,
-[data-theme="light"] [class*="hover\:bg-\[#2A3245\]"]:hover { background: #E8ECF4 !important; }
-
-[data-theme="light"] .cell-empty { border-color: #D0D6E4 !important; }
-
-[data-theme="light"] [class*="bg-blue-950"],
-[data-theme="light"] [class*="bg-\[#0C0F14\]\/30"] { background: #EFF6FF !important; }
-
-[data-theme="light"] [class*="bg-red-900"],
-[data-theme="light"] [class*="bg-amber-900"],
-[data-theme="light"] [class*="bg-emerald-900"] { opacity: 0.7; }
 
 * { box-sizing: border-box; }
 
