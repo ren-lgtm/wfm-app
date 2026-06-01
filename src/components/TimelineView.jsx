@@ -1,0 +1,1313 @@
+import { useState, useMemo, useEffect } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  hLabel, getMondayOfWeek, toISODate,
+  BASELINE_EMAIL, BASELINE_PHONE,
+  AVG_EMAILS_PER_AGENT_HOUR, AVG_CALLS_PER_AGENT_HOUR,
+  agentsNeededPhone, agentsNeededEmail,
+  getPhoneGap, getEmailGap,
+  PHONE_START, PHONE_END,
+} from '../lib/forecast'
+import { supabase } from '../lib/supabase'
+
+// ─── Mock Data ───────────────────────────────────────────────────────────────
+
+const MOCK_AGENTS = [
+  { id: 'a1', name: 'Deb',     color: '#7C3AED', default_channel: 'email' },
+  { id: 'a2', name: 'Ezra',    color: '#0891B2', default_channel: 'email' },
+  { id: 'a3', name: 'Lucy',    color: '#059669', default_channel: 'email' },
+  { id: 'a4', name: 'Delaney', color: '#D97706', default_channel: 'email' },
+  { id: 'a5', name: 'Allison', color: '#DC2626', default_channel: 'email' },
+  { id: 'a6', name: 'Dolly',   color: '#DB2777', default_channel: 'email' },
+  { id: 'a7', name: 'Lori',    color: '#65A30D', default_channel: 'email' },
+]
+
+function generateAgentDay(agentIdx, dayOfWeek) {
+  const isWeekend = dayOfWeek >= 5
+  if (isWeekend) {
+    if (agentIdx < 4) return null
+    const slots = {}
+    for (let h = 9; h <= 16; h++) { slots[h] = h === 12 ? 'lunch' : 'email' }
+    return slots
+  }
+  const patterns = [
+    (h) => h >= 8  && h <= 16 ? (h === 12 ? 'lunch' : 'email') : null,
+    (h) => h >= 9  && h <= 17 ? (h === 13 ? 'lunch' : 'email') : null,
+    (h) => h >= 8  && h <= 15 ? (h === 12 ? 'lunch' : 'email') : null,
+    (h) => h >= 10 && h <= 18 ? (h === 14 ? 'lunch' : 'email') : null,
+    (h) => h >= 8  && h <= 16 ? (h === 11 ? 'lunch' : 'email') : null,
+    (h) => h >= 9  && h <= 16 ? (h === 13 ? 'lunch' : 'email') : null,
+    (h) => h >= 8  && h <= 15 ? (h === 12 ? 'lunch' : 'email') : null,
+  ]
+  const fn = patterns[agentIdx % patterns.length]
+  const slots = {}
+  for (let h = 0; h < 24; h++) { const v = fn(h); if (v) slots[h] = v }
+  return slots
+}
+
+function buildMockSchedule() {
+  const schedule = {}
+  for (const [idx, agent] of MOCK_AGENTS.entries()) {
+    schedule[agent.id] = {}
+    for (let d = 0; d < 7; d++) { schedule[agent.id][d] = generateAgentDay(idx, d) }
+  }
+  return schedule
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const ALL_HOURS  = Array.from({ length: 24 }, (_, i) => i)
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DAYS_FULL  = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+// Minimum column width for hour cells (px) — keeps header/cell alignment locked
+const HOUR_COL_W = 48
+
+// Channel cell styles
+const CHANNEL_STYLES = {
+  email:  { bg: 'bg-blue-900/60',    text: 'text-blue-300',    label: 'Email'  },
+  phone:  { bg: 'bg-emerald-900/60', text: 'text-emerald-300', label: 'Phone'  },
+  lunch:  { bg: 'bg-amber-900/50',   text: 'text-amber-300',   label: '☕'     },
+  off:    { bg: 'bg-[#111827]',      text: 'text-gray-600',    label: 'Off'    },
+}
+function cellStyle(activity) {
+  return CHANNEL_STYLES[activity] || { bg: '', text: 'text-transparent', label: '' }
+}
+
+// Coverage gap status → display tokens
+const GAP_STATUS = {
+  ok:       { bg: 'bg-emerald-900/60', text: 'text-emerald-300', border: 'border-emerald-700/50' },
+  warn:     { bg: 'bg-amber-900/60',   text: 'text-amber-300',   border: 'border-amber-700/50'   },
+  critical: { bg: 'bg-red-900/60',     text: 'text-red-300',     border: 'border-red-700/50'     },
+  none:     { bg: '',                  text: 'text-gray-700',     border: 'border-transparent'    },
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function addDays(date, n) {
+  const d = new Date(date); d.setDate(d.getDate() + n); return d
+}
+function formatDate(date, opts) {
+  return new Date(date).toLocaleDateString('en-US', opts)
+}
+function getDayOfWeekIdx(date) {
+  const d = new Date(date).getDay()
+  return d === 0 ? 6 : d - 1
+}
+function isoStr(date) { return toISODate(date) }
+
+// For a date, get the slot map from schedule[agentId][dayOffset]
+function getSlotsForDate(schedule, agentId, monday, targetDate) {
+  const dayIdx = Math.round((new Date(targetDate) - new Date(monday)) / 86400000)
+  if (dayIdx < 0 || dayIdx > 6) return {}
+  return schedule[agentId]?.[dayIdx] || {}
+}
+
+// Determine if a (date, hour) is in the past, current, or future relative to now
+function hourStatus(date, hour) {
+  const now = new Date()
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+
+  if (d < todayStart) return 'past'
+  if (d > todayStart) return 'future'
+  // same day
+  const currentHour = now.getHours()
+  if (hour < currentHour) return 'past'
+  if (hour === currentHour) return 'current'
+  return 'future'
+}
+
+// ─── useVolumeData hook — fetches actual volume for a specific date ───────────
+
+function useVolumeData(date) {
+  const [data, setData] = useState({ phone: {}, email: {} }) // { [hour]: count }
+
+  useEffect(() => {
+    if (!date) return
+    const iso = isoStr(date)
+    let cancelled = false
+
+    async function load() {
+      const [{ data: phoneRows }, { data: emailRows }] = await Promise.all([
+        supabase.from('phone_volume')
+          .select('hour,call_count')
+          .eq('date', iso),
+        supabase.from('email_volume')
+          .select('hour,tickets_created')
+          .eq('date', iso),
+      ])
+      if (cancelled) return
+      const phone = {}
+      for (const r of (phoneRows || [])) phone[r.hour] = r.call_count
+      const email = {}
+      for (const r of (emailRows || [])) email[r.hour] = r.tickets_created
+      setData({ phone, email })
+    }
+    load()
+    return () => { cancelled = true }
+  }, [isoStr(date)])
+
+  return data
+}
+
+// ─── useLatestWeekSchedule — fetches the most recent saved week as a template ──
+//
+// Returns { schedule, weekStart, loading } where schedule has the same
+// agentId → dayOffset(0-6) → { hour: activity } shape the rest of the
+// component uses, or null if nothing is saved yet.
+
+function useLatestWeekSchedule(agents) {
+  const [result, setResult] = useState({ schedule: null, weekStart: null, loading: true })
+
+  useEffect(() => {
+    if (!agents || agents.length === 0) {
+      setResult({ schedule: null, weekStart: null, loading: false })
+      return
+    }
+    let cancelled = false
+
+    async function load() {
+      // Find the most recent week_start that has any schedule rows
+      const { data: weekRows } = await supabase
+        .from('schedules')
+        .select('week_start')
+        .order('week_start', { ascending: false })
+        .limit(1)
+
+      if (cancelled) return
+
+      const weekStart = weekRows?.[0]?.week_start
+      if (!weekStart) {
+        setResult({ schedule: null, weekStart: null, loading: false })
+        return
+      }
+
+      const { data: schedules } = await supabase
+        .from('schedules')
+        .select('*, schedule_slots(*)')
+        .eq('week_start', weekStart)
+
+      if (cancelled) return
+
+      // Convert to agentId → dayOffset(0-6) → { hour: activity }
+      const dow2idx = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }
+      const sched = {}
+      for (const agent of agents) {
+        sched[agent.id] = { 0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {} }
+      }
+      for (const row of (schedules || [])) {
+        const di = dow2idx[row.day_of_week]
+        if (di === undefined) continue
+        if (!sched[row.agent_id]) continue
+        if (row.is_off) {
+          sched[row.agent_id][di] = null
+        } else {
+          const slots = {}
+          for (const slot of row.schedule_slots || []) {
+            slots[slot.hour] = slot.activity
+          }
+          sched[row.agent_id][di] = slots
+        }
+      }
+
+      setResult({ schedule: sched, weekStart, loading: false })
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [agents?.map(a => a.id).join(',')])
+
+  return result
+}
+
+// ─── Day View ─────────────────────────────────────────────────────────────────
+
+function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast }) {
+  const dayIdx    = getDayOfWeekIdx(date)
+  const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
+  const actualVol = useVolumeData(date)         // actual DB volume for this date
+
+  // Check if the current schedule has any data for this specific day
+  const hasDayData = useMemo(() => {
+    for (const agent of agents) {
+      const slots = getSlotsForDate(schedule, agent.id, monday, date)
+      if (Object.keys(slots).length > 0) return true
+    }
+    return false
+  }, [agents, schedule, monday, date])
+
+  // Fetch the most-recent saved week as a fallback template
+  const { schedule: templateSchedule, weekStart: templateWeekStart, loading: templateLoading } =
+    useLatestWeekSchedule(hasDayData ? [] : agents)  // skip fetch when we have live data
+
+  // The schedule source we actually render:
+  // - live data for this date if it exists
+  // - otherwise the template week's same day-of-week
+  const isTemplate = !hasDayData && !!templateSchedule
+  const effectiveSchedule = isTemplate ? templateSchedule : schedule
+  const effectiveMonday   = isTemplate
+    ? new Date(templateWeekStart + 'T00:00:00') // treat template monday as anchor
+    : monday
+
+  // For the template: we want the same day-of-week (0-6), not offset from today's monday.
+  // getSlotsForDate computes offset from monday; for template just read dayIdx directly.
+  function getSlotsForRender(agentId) {
+    if (isTemplate) {
+      return effectiveSchedule[agentId]?.[dayIdx] || {}
+    }
+    return getSlotsForDate(schedule, agentId, monday, date)
+  }
+
+  // Per-agent slot maps for this day
+  const agentSlots = useMemo(() => {
+    const m = {}
+    for (const a of agents) m[a.id] = getSlotsForRender(a.id)
+    return m
+  }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
+
+  // Determine which hours have any activity (to auto-trim the display)
+  // Always show full 24 h as requested, but we'll grey out dead zones
+  const hours = ALL_HOURS
+
+  // Current time info for highlighting
+  const now = new Date()
+  const currentHour = now.getHours()
+  const isToday = isoStr(date) === isoStr(new Date())
+
+  // Per-hour coverage counts
+  const coverage = useMemo(() => {
+    const out = {}
+    for (const h of hours) {
+      let emailStaff = 0, phoneStaff = 0
+      for (const a of agents) {
+        const act = agentSlots[a.id]?.[h]
+        if (act === 'email') emailStaff++
+        if (act === 'phone') phoneStaff++
+      }
+      out[h] = { emailStaff, phoneStaff }
+    }
+    return out
+  }, [agentSlots, agents, hours])
+
+  // Resolve volume for a given hour: actual (past/current) or forecast (future)
+  function emailVolume(h) {
+    const status = hourStatus(date, h)
+    if (status === 'past' || status === 'current') {
+      // Use actual if we have it, else fall back to forecast
+      return actualVol.email[h] ?? (emailForecast[dow]?.[h] || 0)
+    }
+    return emailForecast[dow]?.[h] || 0
+  }
+  function phoneVolume(h) {
+    const status = hourStatus(date, h)
+    if (status === 'past' || status === 'current') {
+      return actualVol.phone[h] ?? (phoneForecast[dow]?.[h] || 0)
+    }
+    return phoneForecast[dow]?.[h] || 0
+  }
+
+  // Use the same shared functions as CoverageBar so both views are identical
+  function emailNeeded(h) { return agentsNeededEmail(emailVolume(h)) }
+  function phoneNeeded(h) { return agentsNeededPhone(phoneVolume(h)) }
+
+  // Label for source (actual vs forecast)
+  function volLabel(h) {
+    const s = hourStatus(date, h)
+    return s === 'past' || s === 'current' ? 'actual' : 'fcst'
+  }
+
+  // Template banner text
+  const templateBanner = isTemplate && templateWeekStart
+    ? `Showing last saved schedule (week of ${new Date(templateWeekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}) as template — no schedule saved for this date yet`
+    : null
+
+  return (
+    <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
+
+      {/* Template banner */}
+      {templateBanner && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-indigo-950/60 border-b border-indigo-800/50">
+          <span className="text-[10px] text-indigo-300">{templateBanner}</span>
+        </div>
+      )}
+
+      {/* Loading state for template fetch */}
+      {!hasDayData && templateLoading && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-[#0C0F14] border-b border-[#2A3245]">
+          <span className="text-[10px] text-gray-600">Loading template…</span>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="text-[10px] border-collapse" style={{ minWidth: 24 * HOUR_COL_W + 140 }}>
+
+          {/* ── Column widths ── */}
+          <colgroup>
+            <col style={{ width: 140, minWidth: 140 }} />
+            {hours.map(h => <col key={h} style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W }} />)}
+          </colgroup>
+
+          <thead>
+            {/* Phone-hours bracket row — label spans phone columns via colspan */}
+            <tr>
+              <th className="sticky left-0 z-20 bg-[#141922] border-r border-[#2A3245]" />
+              {hours.map(h => {
+                const isPhone = h >= PHONE_START && h < PHONE_END
+                if (h === PHONE_START) {
+                  return (
+                    <th
+                      key={h}
+                      colSpan={PHONE_END - PHONE_START}
+                      className="pt-1 pb-0 text-center bg-emerald-950/40 overflow-hidden"
+                    >
+                      <span className="text-[8px] font-semibold text-emerald-600 tracking-widest uppercase">
+                        Phone hours
+                      </span>
+                    </th>
+                  )
+                }
+                if (isPhone) return null  // consumed by colspan above
+                return <th key={h} className="pt-1 pb-0" />
+              })}
+            </tr>
+
+            <tr>
+              <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-3 text-xs font-semibold text-gray-300 border-b border-r border-[#2A3245]">
+                Agent
+              </th>
+              {hours.map(h => {
+                const isCurrent  = isToday && h === currentHour
+                const isPast     = isToday && h < currentHour
+                const isPhone    = h >= PHONE_START && h < PHONE_END
+                return (
+                  <th
+                    key={h}
+                    className={`py-3 text-center font-mono border-b border-[#2A3245] ${
+                      isCurrent
+                        ? 'text-blue-400 bg-blue-950/30 border-l-2 border-l-blue-500'
+                        : isPhone
+                          ? isPast ? 'text-emerald-900 bg-emerald-950/40' : 'text-emerald-600 bg-emerald-950/40'
+                          : isPast
+                            ? 'text-gray-700'
+                            : 'text-gray-500'
+                    }`}
+                  >
+                    {hLabel(h)}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+
+          <tbody>
+            {/* ── Agent rows ── */}
+            {agents.map((agent, idx) => {
+              const slots = agentSlots[agent.id] || {}
+              return (
+                <tr
+                  key={agent.id}
+                  className={`border-b border-[#1A1F2E] ${idx % 2 === 1 ? 'bg-[#0C0F14]/20' : ''}`}
+                >
+                  <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-3 py-1">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                        style={{ background: agent.color }}
+                      >
+                        {agent.name[0]}
+                      </div>
+                      <span className="text-xs font-medium text-gray-200 whitespace-nowrap">{agent.name}</span>
+                    </div>
+                  </td>
+                  {hours.map(h => {
+                    const act       = slots[h]
+                    const cs        = cellStyle(act)
+                    const isCurrent = isToday && h === currentHour
+                    const isPast    = isToday && h < currentHour
+                    const isPhone   = h >= PHONE_START && h < PHONE_END
+                    return (
+                      <td
+                        key={h}
+                        className={`py-1 px-0.5 ${
+                          isCurrent
+                            ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
+                            : isPhone
+                              ? 'bg-emerald-950/20'
+                              : ''
+                        }`}
+                      >
+                        {act && act !== 'off' ? (
+                          <div className={`
+                            text-center rounded text-[9px] font-medium py-1
+                            ${cs.bg} ${cs.text}
+                            ${isPast && act !== 'lunch' ? 'opacity-60' : ''}
+                          `}>
+                            {cs.label}
+                          </div>
+                        ) : (
+                          <div className="h-5" />
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+
+            {/* ── Divider row between agents and summary ── */}
+            <tr>
+              <td
+                colSpan={hours.length + 1}
+                className="h-px bg-[#2A3245]"
+              />
+            </tr>
+
+            {/* ══════════════════════════════════════════
+                EMAIL COVERAGE ROWS
+            ══════════════════════════════════════════ */}
+            <CoverageGroupHeader label="Email" hours={hours} isToday={isToday} currentHour={currentHour} />
+
+            {/* Email Staffed */}
+            <CoverageRow
+              label="Staffed"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              renderCell={(h) => {
+                const n = coverage[h].emailStaff
+                return n > 0
+                  ? <span className="font-mono font-semibold text-blue-300">{n}</span>
+                  : <span className="text-gray-700">—</span>
+              }}
+            />
+
+            {/* Email Volume */}
+            <CoverageRow
+              label="Volume"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              renderCell={(h) => {
+                const vol = emailVolume(h)
+                const src = volLabel(h)
+                if (!vol) return <span className="text-gray-700">—</span>
+                return (
+                  <span className={`font-mono ${src === 'actual' ? 'text-gray-300' : 'text-gray-500'}`}>
+                    {vol}
+                  </span>
+                )
+              }}
+            />
+
+            {/* Email Needed */}
+            <CoverageRow
+              label="Needed"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              renderCell={(h) => {
+                const n = emailNeeded(h)
+                return n > 0
+                  ? <span className="font-mono text-gray-500">{n}</span>
+                  : <span className="text-gray-700">—</span>
+              }}
+            />
+
+            {/* Email Gap */}
+            <CoverageRow
+              label="Gap"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              isGapRow
+              renderCell={(h) => {
+                const staffed = coverage[h].emailStaff
+                const vol     = emailVolume(h)
+                const needed  = emailNeeded(h)
+                const status  = getEmailGap(staffed, vol)   // identical to CoverageBar
+                if (status === 'none') return <span className="text-gray-700">—</span>
+                const diff  = staffed - needed
+                const style = GAP_STATUS[status]
+                return (
+                  <div className={`rounded text-[9px] font-mono font-semibold px-0.5 py-0.5 text-center border ${style.bg} ${style.text} ${style.border}`}>
+                    {diff >= 0 ? `+${diff}` : diff}
+                  </div>
+                )
+              }}
+            />
+
+            {/* ══════════════════════════════════════════
+                PHONE COVERAGE ROWS
+            ══════════════════════════════════════════ */}
+            <CoverageGroupHeader label="Phone" hours={hours} isToday={isToday} currentHour={currentHour} />
+
+            {/* Phone Staffed */}
+            <CoverageRow
+              label="Staffed"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              renderCell={(h) => {
+                const n = coverage[h].phoneStaff
+                return n > 0
+                  ? <span className="font-mono font-semibold text-emerald-300">{n}</span>
+                  : <span className="text-gray-700">—</span>
+              }}
+            />
+
+            {/* Phone Volume */}
+            <CoverageRow
+              label="Volume"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              renderCell={(h) => {
+                const vol = phoneVolume(h)
+                const src = volLabel(h)
+                if (!vol) return <span className="text-gray-700">—</span>
+                return (
+                  <span className={`font-mono ${src === 'actual' ? 'text-gray-300' : 'text-gray-500'}`}>
+                    {vol}
+                  </span>
+                )
+              }}
+            />
+
+            {/* Phone Needed */}
+            <CoverageRow
+              label="Needed"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              renderCell={(h) => {
+                const n = phoneNeeded(h)
+                return n > 0
+                  ? <span className="font-mono text-gray-500">{n}</span>
+                  : <span className="text-gray-700">—</span>
+              }}
+            />
+
+            {/* Phone Gap */}
+            <CoverageRow
+              label="Gap"
+              hours={hours}
+              isToday={isToday}
+              currentHour={currentHour}
+              isGapRow
+              renderCell={(h) => {
+                const staffed = coverage[h].phoneStaff
+                const vol     = phoneVolume(h)
+                const needed  = phoneNeeded(h)
+                const status  = getPhoneGap(staffed, vol)   // identical to CoverageBar
+                if (status === 'none') return <span className="text-gray-700">—</span>
+                const diff  = staffed - needed
+                const style = GAP_STATUS[status]
+                return (
+                  <div className={`rounded text-[9px] font-mono font-semibold px-0.5 py-0.5 text-center border ${style.bg} ${style.text} ${style.border}`}>
+                    {diff >= 0 ? `+${diff}` : diff}
+                  </div>
+                )
+              }}
+            />
+          </tbody>
+        </table>
+      </div>
+
+      {/* Legend */}
+      <div className="px-4 py-2.5 border-t border-[#2A3245] flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-gray-500">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-900/60 inline-block" /> Email</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-900/60 inline-block" /> Phone</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900/50 inline-block" /> Lunch</span>
+        <span className="text-gray-700">·</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-900/60 border border-emerald-700/50 inline-block" /> Covered</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900/60 border border-amber-700/50 inline-block" /> Understaffed</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-900/60 border border-red-700/50 inline-block" /> Critical gap</span>
+        <span className="text-gray-700">·</span>
+        <span className="text-gray-600">Volume: bold = actual data, dim = forecast</span>
+        {isToday && (
+          <span className="ml-auto flex items-center gap-1.5 text-blue-400">
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Current hour highlighted
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Group header row (Email / Phone separator)
+function CoverageGroupHeader({ label, hours, isToday, currentHour }) {
+  return (
+    <tr className="border-t-2 border-[#2A3245]">
+      <td className="sticky left-0 z-10 bg-[#0F1520] border-r border-[#2A3245] px-4 py-1">
+        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">{label}</span>
+      </td>
+      {hours.map(h => {
+        const isCurrent = isToday && h === currentHour
+        const isPhone   = h >= PHONE_START && h < PHONE_END
+        return (
+          <td
+            key={h}
+            className={`py-1 ${
+              isCurrent
+                ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
+                : isPhone
+                  ? 'bg-emerald-950/30'
+                  : 'bg-[#0F1520]'
+            }`}
+          />
+        )
+      })}
+    </tr>
+  )
+}
+
+// Generic coverage summary row
+function CoverageRow({ label, hours, isToday, currentHour, renderCell, isGapRow = false }) {
+  return (
+    <tr className={`border-t border-[#1A1F2E] ${isGapRow ? 'bg-[#0C0F14]/60' : 'bg-[#0C0F14]/40'}`}>
+      <td className="sticky left-0 z-10 bg-[#0C0F14]/80 border-r border-[#2A3245] px-4 py-1">
+        <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">{label}</span>
+      </td>
+      {hours.map(h => {
+        const isCurrent = isToday && h === currentHour
+        const isPhone   = h >= PHONE_START && h < PHONE_END
+        return (
+          <td
+            key={h}
+            className={`py-1 px-0.5 text-center text-[10px] ${
+              isCurrent
+                ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
+                : isPhone
+                  ? 'bg-emerald-950/20'
+                  : ''
+            }`}
+          >
+            {renderCell(h)}
+          </td>
+        )
+      })}
+    </tr>
+  )
+}
+
+// ─── Week View ────────────────────────────────────────────────────────────────
+
+function WeekView({ monday, agents, schedule }) {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
+
+  return (
+    <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs" style={{ minWidth: 700 }}>
+          <thead>
+            <tr className="border-b border-[#2A3245]">
+              <th className="sticky left-0 z-10 bg-[#141922] text-left px-4 py-3 w-32 font-semibold text-gray-300 border-r border-[#2A3245]">
+                Agent
+              </th>
+              {days.map((d, i) => {
+                const isWeekend = i >= 5
+                return (
+                  <th key={i} className={`py-3 px-3 text-center min-w-[100px] ${isWeekend ? 'text-gray-600' : 'text-gray-300'}`}>
+                    <div className="font-semibold">{DAYS_SHORT[i]}</div>
+                    <div className="text-[10px] text-gray-500 font-mono">{formatDate(d, { month: 'short', day: 'numeric' })}</div>
+                  </th>
+                )
+              })}
+              <th className="py-3 px-3 text-center text-gray-400 font-semibold">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {agents.map((agent, idx) => {
+              const weekTotal = { email: 0, phone: 0 }
+              const dayCells = days.map((d, di) => {
+                const slots = getSlotsForDate(schedule, agent.id, monday, d)
+                let email = 0, phone = 0
+                Object.values(slots).forEach(v => {
+                  if (v === 'email') email++
+                  if (v === 'phone') phone++
+                })
+                weekTotal.email += email
+                weekTotal.phone += phone
+                return { email, phone, isOff: email + phone === 0 }
+              })
+
+              return (
+                <tr key={agent.id} className={`border-t border-[#1A1F2E] ${idx % 2 === 1 ? 'bg-[#0C0F14]/20' : ''}`}>
+                  <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style={{ background: agent.color }}>
+                        {agent.name[0]}
+                      </div>
+                      <span className="font-medium text-gray-200 whitespace-nowrap">{agent.name}</span>
+                    </div>
+                  </td>
+                  {dayCells.map((cell, di) => {
+                    const isWeekend = di >= 5
+                    if (cell.isOff) {
+                      return (
+                        <td key={di} className={`py-2 px-3 text-center ${isWeekend ? 'opacity-30' : ''}`}>
+                          <span className="text-[10px] text-gray-700">Off</span>
+                        </td>
+                      )
+                    }
+                    return (
+                      <td key={di} className="py-2 px-3">
+                        <div className="flex flex-col gap-0.5">
+                          {cell.email > 0 && (
+                            <div className="flex items-center justify-between bg-blue-900/40 rounded px-2 py-0.5">
+                              <span className="text-[9px] text-blue-400">Email</span>
+                              <span className="text-[10px] font-mono text-blue-300 font-semibold">{cell.email}h</span>
+                            </div>
+                          )}
+                          {cell.phone > 0 && (
+                            <div className="flex items-center justify-between bg-emerald-900/40 rounded px-2 py-0.5">
+                              <span className="text-[9px] text-emerald-400">Phone</span>
+                              <span className="text-[10px] font-mono text-emerald-300 font-semibold">{cell.phone}h</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    )
+                  })}
+                  <td className="py-2 px-3 text-center border-l border-[#2A3245]">
+                    <div className="text-xs font-mono font-semibold text-gray-300">{weekTotal.email + weekTotal.phone}h</div>
+                    <div className="text-[9px] text-gray-600">{((weekTotal.email + weekTotal.phone) / 40 * 100).toFixed(0)}% FTE</div>
+                  </td>
+                </tr>
+              )
+            })}
+
+            {/* Coverage summary rows */}
+            <tr className="border-t-2 border-[#2A3245]">
+              <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-4 py-1.5">
+                <span className="text-[10px] text-gray-500 font-medium">Email Agents</span>
+              </td>
+              {days.map((d, di) => {
+                let emailAgents = 0
+                for (const agent of agents) {
+                  const slots = getSlotsForDate(schedule, agent.id, monday, d)
+                  if (Object.values(slots).includes('email')) emailAgents++
+                }
+                const isWeekend = di >= 5
+                return (
+                  <td key={di} className={`py-1.5 px-3 text-center ${isWeekend ? 'opacity-40' : ''}`}>
+                    <span className="text-[10px] font-mono font-semibold text-blue-300">{emailAgents}</span>
+                  </td>
+                )
+              })}
+              <td className="border-l border-[#2A3245]" />
+            </tr>
+
+            <tr className="border-t border-[#1A1F2E]">
+              <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-4 py-1.5">
+                <span className="text-[10px] text-gray-500 font-medium">Coverage Health</span>
+              </td>
+              {days.map((d, di) => {
+                let emailAgents = 0
+                for (const agent of agents) {
+                  const slots = getSlotsForDate(schedule, agent.id, monday, d)
+                  if (Object.values(slots).includes('email')) emailAgents++
+                }
+                const isWeekend = di >= 5
+                const needed = isWeekend ? 2 : 4
+                const status = emailAgents >= needed ? 'ok' : emailAgents >= Math.ceil(needed * 0.6) ? 'warn' : 'critical'
+                const statusStyle = {
+                  ok:       'bg-emerald-900/50 text-emerald-400',
+                  warn:     'bg-amber-900/50 text-amber-400',
+                  critical: 'bg-red-900/50 text-red-400',
+                }
+                return (
+                  <td key={di} className="py-1.5 px-3 text-center">
+                    <span className={`text-[9px] font-semibold px-2 py-0.5 rounded ${statusStyle[status]}`}>
+                      {status === 'ok' ? 'Good' : status === 'warn' ? 'Low' : 'Gap'}
+                    </span>
+                  </td>
+                )
+              })}
+              <td className="border-l border-[#2A3245]" />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Month View ───────────────────────────────────────────────────────────────
+
+function MonthView({ year, month, agents, schedule, monday, onSelectDay }) {
+  const firstDay  = new Date(year, month, 1)
+  const lastDay   = new Date(year, month + 1, 0)
+  const startDow  = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
+  const calStart  = addDays(firstDay, -startDow)
+
+  const weeks = []
+  for (let w = 0; w < 6; w++) {
+    const week = []
+    for (let d = 0; d < 7; d++) week.push(addDays(calStart, w * 7 + d))
+    weeks.push(week)
+    if (week[6] >= lastDay) break
+  }
+
+  const todayStr = isoStr(new Date())
+
+  function getCoverageForDate(date) {
+    let emailAgents = 0, totalHours = 0
+    for (const agent of agents) {
+      const slots = getSlotsForDate(schedule, agent.id, monday, date)
+      let hrs = 0
+      Object.values(slots).forEach(v => { if (v === 'email' || v === 'phone') hrs++ })
+      if (hrs > 0) emailAgents++
+      totalHours += hrs
+    }
+    const di     = getDayOfWeekIdx(date)
+    const needed = di >= 5 ? 2 : 4
+    const status = totalHours === 0 ? 'none'
+      : emailAgents >= needed ? 'ok'
+      : emailAgents >= Math.ceil(needed * 0.6) ? 'warn'
+      : 'critical'
+    return { emailAgents, totalHours, status }
+  }
+
+  const statusColor = {
+    ok:       { dot: 'bg-emerald-500', label: 'text-emerald-400', bar: 'bg-emerald-900/50' },
+    warn:     { dot: 'bg-amber-500',   label: 'text-amber-400',   bar: 'bg-amber-900/50'   },
+    critical: { dot: 'bg-red-500',     label: 'text-red-400',     bar: 'bg-red-900/50'     },
+    none:     { dot: 'bg-gray-700',    label: 'text-gray-700',    bar: ''                  },
+  }
+
+  return (
+    <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
+      <div className="grid grid-cols-7 border-b border-[#2A3245]">
+        {DAYS_SHORT.map(d => (
+          <div key={d} className="py-2 text-center text-[10px] font-semibold text-gray-500 border-r border-[#2A3245] last:border-r-0">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {weeks.map((week, wi) => (
+        <div key={wi} className="grid grid-cols-7 border-b border-[#2A3245] last:border-b-0" style={{ minHeight: 90 }}>
+          {week.map((date, di) => {
+            const isCurrentMonth = date.getMonth() === month
+            const isToday        = isoStr(date) === todayStr
+            const isWeekend      = di >= 5
+            const { emailAgents, totalHours, status } = getCoverageForDate(date)
+            const sc = statusColor[status]
+
+            return (
+              <button
+                key={di}
+                onClick={() => onSelectDay(date)}
+                className={`
+                  relative p-2 text-left border-r border-[#2A3245] last:border-r-0 transition-colors
+                  hover:bg-[#2A3245]/40
+                  ${!isCurrentMonth ? 'opacity-30' : ''}
+                  ${isWeekend ? 'bg-[#0C0F14]/20' : ''}
+                `}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-xs font-mono font-semibold ${
+                    isToday
+                      ? 'bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]'
+                      : isCurrentMonth ? 'text-gray-300' : 'text-gray-600'
+                  }`}>
+                    {date.getDate()}
+                  </span>
+                  {isCurrentMonth && status !== 'none' && (
+                    <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
+                  )}
+                </div>
+                {isCurrentMonth && totalHours > 0 && (
+                  <div className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${sc.bar} ${sc.label}`}>
+                    {emailAgents} agents · {Math.round(totalHours)}h
+                  </div>
+                )}
+                {isCurrentMonth && totalHours === 0 && (
+                  <div className="text-[9px] text-gray-700">No schedule</div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      ))}
+
+      <div className="px-4 py-2.5 border-t border-[#2A3245] flex items-center gap-4 text-[10px] text-gray-500">
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Well staffed</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Understaffed</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Coverage gap</span>
+        <span className="ml-auto text-gray-600 italic">Click any day to view detailed timeline</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Custom Range View ────────────────────────────────────────────────────────
+
+function CustomRangeView({ startDate, endDate, agents, schedule, monday, onSelectDay }) {
+  if (!startDate || !endDate) {
+    return (
+      <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-10 text-center text-gray-500 text-sm">
+        Select a start and end date above to view the timeline.
+      </div>
+    )
+  }
+
+  // Parse YYYY-MM-DD strings as local dates (avoid UTC shift)
+  const [sy, sm, sd] = startDate.split('-').map(Number)
+  const [ey, em, ed] = endDate.split('-').map(Number)
+  const start = new Date(sy, sm - 1, sd)
+  const end   = new Date(ey, em - 1, ed)
+
+  if (end < start) {
+    return (
+      <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-10 text-center text-red-400 text-sm">
+        End date must be after start date.
+      </div>
+    )
+  }
+
+  const diffDays = Math.round((end - start) / 86400000) + 1
+  if (diffDays > 60) {
+    return (
+      <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-10 text-center text-amber-400 text-sm">
+        Range too large. Please select 60 days or fewer.
+      </div>
+    )
+  }
+
+  const dates = Array.from({ length: diffDays }, (_, i) => addDays(start, i))
+
+  return (
+    <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="text-xs border-collapse" style={{ minWidth: Math.max(700, diffDays * 82 + 160) }}>
+          <thead>
+            <tr className="border-b border-[#2A3245]">
+              <th className="sticky left-0 z-10 bg-[#141922] text-left px-4 py-3 w-36 font-semibold text-gray-300 border-r border-[#2A3245]">
+                Agent
+              </th>
+              {dates.map((d, i) => {
+                const di        = getDayOfWeekIdx(d)
+                const isWeekend = di >= 5
+                const isToday   = isoStr(d) === isoStr(new Date())
+                return (
+                  <th key={i} className={`py-2 px-1 text-center min-w-[72px] ${isWeekend ? 'text-gray-600 bg-[#0C0F14]/20' : 'text-gray-400'} ${isToday ? 'bg-blue-950/30' : ''}`}>
+                    <div className="text-[9px] text-gray-500">{DAYS_SHORT[di]}</div>
+                    <div className={`font-mono text-[10px] ${isToday ? 'text-blue-400 font-semibold' : ''}`}>
+                      {formatDate(d, { month: 'numeric', day: 'numeric' })}
+                    </div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {agents.map((agent, idx) => (
+              <tr key={agent.id} className={`border-t border-[#1A1F2E] ${idx % 2 === 1 ? 'bg-[#0C0F14]/20' : ''}`}>
+                <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0" style={{ background: agent.color }}>
+                      {agent.name[0]}
+                    </div>
+                    <span className="font-medium text-gray-200 whitespace-nowrap">{agent.name}</span>
+                  </div>
+                </td>
+                {dates.map((d, ci) => {
+                  const dayIdx    = getDayOfWeekIdx(d)
+                  const isWeekend = dayIdx >= 5
+                  const isToday   = isoStr(d) === isoStr(new Date())
+                  const slots     = getSlotsForDate(schedule, agent.id, monday, d)
+                  let email = 0, phone = 0
+                  Object.values(slots).forEach(v => {
+                    if (v === 'email') email++
+                    if (v === 'phone') phone++
+                  })
+                  return (
+                    <td
+                      key={ci}
+                      className={`py-1.5 px-1 text-center cursor-pointer hover:bg-[#2A3245]/40
+                        ${isWeekend ? 'bg-[#0C0F14]/20' : ''}
+                        ${isToday ? 'bg-blue-950/20' : ''}
+                      `}
+                      onClick={() => onSelectDay(d)}
+                    >
+                      {email + phone > 0 ? (
+                        <div className="space-y-0.5">
+                          {email > 0 && <div className="text-[9px] rounded bg-blue-900/50 text-blue-300 font-mono px-1 py-0.5">{email}h</div>}
+                          {phone > 0 && <div className="text-[9px] rounded bg-emerald-900/50 text-emerald-300 font-mono px-1 py-0.5">{phone}h</div>}
+                        </div>
+                      ) : (
+                        <span className="text-[9px] text-gray-700">—</span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+
+            <tr className="border-t-2 border-[#2A3245]">
+              <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-4 py-1.5">
+                <span className="text-[10px] text-gray-500 font-medium">Active Agents</span>
+              </td>
+              {dates.map((d, ci) => {
+                const dayIdx    = getDayOfWeekIdx(d)
+                const isWeekend = dayIdx >= 5
+                let active = 0
+                for (const agent of agents) {
+                  const slots = getSlotsForDate(schedule, agent.id, monday, d)
+                  if (Object.values(slots).some(v => v === 'email' || v === 'phone')) active++
+                }
+                return (
+                  <td key={ci} className={`py-1.5 px-1 text-center ${isWeekend ? 'bg-[#0C0F14]/20 opacity-50' : ''}`}>
+                    <span className="text-[10px] font-mono font-semibold text-gray-300">{active}</span>
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main TimelineView ────────────────────────────────────────────────────────
+
+export default function TimelineView({
+  agents: liveAgents,
+  weekSchedule: liveSchedule,
+  currentMonday: liveMonday,
+  phoneForecast: livePF,
+  emailForecast: liveEF,
+}) {
+  const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
+
+  const [viewMode,     setViewMode]     = useState('day')
+  const [selectedDate, setSelectedDate] = useState(todayDate)
+  const [monthOffset,  setMonthOffset]  = useState(0)
+  const [customStart,  setCustomStart]  = useState('')
+  const [customEnd,    setCustomEnd]    = useState('')
+
+  // Live vs mock agents
+  const hasLiveData = liveAgents && liveAgents.length > 0
+  const agents = hasLiveData ? liveAgents : MOCK_AGENTS
+
+  // Anchor Monday
+  const monday = useMemo(() => {
+    if (hasLiveData && liveMonday) return liveMonday
+    return getMondayOfWeek(todayDate)
+  }, [hasLiveData, liveMonday, todayDate])
+
+  // Schedule (mock or live)
+  const mockSchedule = useMemo(() => buildMockSchedule(), [])
+  const schedule = useMemo(() => {
+    if (!hasLiveData) return mockSchedule
+    const hasData = Object.values(liveSchedule || {}).some(aw =>
+      Object.values(aw || {}).some(ds => Object.keys(ds || {}).length > 0)
+    )
+    if (!hasData) return mockSchedule
+    const converted = {}
+    for (const agent of agents) {
+      converted[agent.id] = {}
+      DAYS_SHORT.forEach((day, di) => {
+        converted[agent.id][di] = liveSchedule[agent.id]?.[day] || {}
+      })
+    }
+    return converted
+  }, [hasLiveData, liveSchedule, mockSchedule, agents])
+
+  // Forecast — use live if available, else baseline
+  const phoneForecast = useMemo(() => livePF && Object.keys(livePF).length > 0 ? livePF : BASELINE_PHONE, [livePF])
+  const emailForecast = useMemo(() => liveEF && Object.keys(liveEF).length > 0 ? liveEF : BASELINE_EMAIL, [liveEF])
+
+  // Month date
+  const monthDate = useMemo(() => {
+    const d = new Date(todayDate)
+    d.setMonth(d.getMonth() + monthOffset)
+    return d
+  }, [monthOffset, todayDate])
+
+  const weekMonday = useMemo(() => getMondayOfWeek(selectedDate), [selectedDate])
+
+  // Navigation
+  const prevDay  = () => setSelectedDate(d => addDays(d, -1))
+  const nextDay  = () => setSelectedDate(d => addDays(d,  1))
+  const prevWeek = () => setSelectedDate(d => addDays(d, -7))
+  const nextWeek = () => setSelectedDate(d => addDays(d,  7))
+
+  const handleMonthDayClick  = (date) => { setSelectedDate(date); setViewMode('day') }
+  const handleCustomDayClick = (date) => { setSelectedDate(date); setViewMode('day') }
+
+  const viewModes = [
+    { id: 'day',    label: 'Day'          },
+    { id: 'week',   label: 'Week'         },
+    { id: 'month',  label: 'Month'        },
+    { id: 'custom', label: 'Custom Range' },
+  ]
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Toolbar ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+
+          {/* View mode pills */}
+          <div className="flex rounded-lg overflow-hidden border border-[#2A3245]">
+            {viewModes.map(vm => (
+              <button
+                key={vm.id}
+                onClick={() => setViewMode(vm.id)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  viewMode === vm.id
+                    ? 'bg-[#2A3245] text-white'
+                    : 'bg-[#141922] text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E]'
+                }`}
+              >
+                {vm.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Day nav */}
+          {viewMode === 'day' && (
+            <div className="flex items-center gap-1">
+              <button onClick={prevDay} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-sm font-semibold text-white px-2 font-mono min-w-[130px] text-center">
+                {formatDate(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' })}
+              </span>
+              <button onClick={nextDay} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={() => setSelectedDate(todayDate)}
+                className="ml-1 px-2 py-1 text-[10px] rounded bg-[#1A1F2E] text-gray-400 hover:text-white hover:bg-[#2A3245] transition-colors"
+              >
+                Today
+              </button>
+            </div>
+          )}
+
+          {/* Week nav */}
+          {viewMode === 'week' && (
+            <div className="flex items-center gap-1">
+              <button onClick={prevWeek} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-sm font-semibold text-white px-2 font-mono min-w-[160px] text-center">
+                {formatDate(weekMonday, { month: 'short', day: 'numeric' })} – {formatDate(addDays(weekMonday, 6), { month: 'short', day: 'numeric' })}
+              </span>
+              <button onClick={nextWeek} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={() => setSelectedDate(todayDate)}
+                className="ml-1 px-2 py-1 text-[10px] rounded bg-[#1A1F2E] text-gray-400 hover:text-white hover:bg-[#2A3245] transition-colors"
+              >
+                This week
+              </button>
+            </div>
+          )}
+
+          {/* Month nav */}
+          {viewMode === 'month' && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => setMonthOffset(o => o - 1)} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-sm font-semibold text-white px-2 font-mono min-w-[110px] text-center">
+                {MONTHS_SHORT[monthDate.getMonth()]} {monthDate.getFullYear()}
+              </span>
+              <button onClick={() => setMonthOffset(o => o + 1)} className="p-1.5 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={() => setMonthOffset(0)}
+                className="ml-1 px-2 py-1 text-[10px] rounded bg-[#1A1F2E] text-gray-400 hover:text-white hover:bg-[#2A3245] transition-colors"
+              >
+                This month
+              </button>
+            </div>
+          )}
+
+          {/* Custom range — proper date pickers */}
+          {viewMode === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customStart}
+                onChange={e => setCustomStart(e.target.value)}
+                className="bg-[#0C0F14] border border-[#2A3245] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono cursor-pointer"
+                style={{ colorScheme: 'dark' }}
+              />
+              <span className="text-gray-500 text-xs">to</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="bg-[#0C0F14] border border-[#2A3245] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono cursor-pointer"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Mock data banner */}
+        {!hasLiveData && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-800/50">
+            <span className="text-[10px] text-amber-400">Showing mock data — connect Supabase to see live schedules</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── View content ── */}
+      {viewMode === 'day' && (
+        <DayView
+          date={selectedDate}
+          agents={agents}
+          schedule={schedule}
+          monday={monday}
+          phoneForecast={phoneForecast}
+          emailForecast={emailForecast}
+        />
+      )}
+
+      {viewMode === 'week' && (
+        <WeekView
+          monday={weekMonday}
+          agents={agents}
+          schedule={schedule}
+        />
+      )}
+
+      {viewMode === 'month' && (
+        <MonthView
+          year={monthDate.getFullYear()}
+          month={monthDate.getMonth()}
+          agents={agents}
+          schedule={schedule}
+          monday={monday}
+          onSelectDay={handleMonthDayClick}
+        />
+      )}
+
+      {viewMode === 'custom' && (
+        <CustomRangeView
+          startDate={customStart}
+          endDate={customEnd}
+          agents={agents}
+          schedule={schedule}
+          monday={monday}
+          onSelectDay={handleCustomDayClick}
+        />
+      )}
+    </div>
+  )
+}
