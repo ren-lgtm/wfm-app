@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env.local
+.env
+.DS_Store
+src/.DS_Store
+supabase/.DS_Store
