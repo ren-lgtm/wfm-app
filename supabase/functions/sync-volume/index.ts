@@ -66,7 +66,7 @@ async function syncAircall(targetDate: Date) {
 
       if (inPhoneHours) {
         if (!hourSLA[h]) hourSLA[h] = { answered: 0, missed: 0, waitSecs: [] }
-        const wasAnswered = call.answered_at && call.answered_at > 0 && call.duration > 0
+        const wasAnswered = call.answered_at && call.answered_at > 0 && call.duration > 0 && call.answered_at > call.started_at
         if (wasAnswered) {
           hourSLA[h].answered++
           if (call.answered_at && call.started_at) {
