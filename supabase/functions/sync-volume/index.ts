@@ -66,7 +66,7 @@ async function syncAircall(targetDate: Date) {
 
       if (inPhoneHours) {
         if (!hourSLA[h]) hourSLA[h] = { answered: 0, missed: 0, waitSecs: [] }
-        const wasAnswered = call.answered_at !== null && call.duration > 0
+        const wasAnswered = call.answered_at && call.answered_at > 0 && call.duration > 0
         if (wasAnswered) {
           hourSLA[h].answered++
           if (call.answered_at && call.started_at) {
@@ -164,6 +164,7 @@ async function syncGorgias(targetDate: Date) {
   const byDateClosed: Record<string, Record<number, number>> = {}
   cursor = null
   done   = false
+  let closedDebugLogged = false
 
   while (!done) {
     let url = `https://${GORGIAS_SUBDOMAIN}.gorgias.com/api/tickets?limit=100&order_by=closed_datetime%3Adesc`
@@ -172,6 +173,13 @@ async function syncGorgias(targetDate: Date) {
     const res  = await fetch(url, { headers: { Authorization: `Basic ${auth}` } })
     const data = await res.json()
     const tickets = data.data || []
+
+    // Debug: log first ticket's fields to understand closed datetime
+    if (!closedDebugLogged && tickets.length > 0) {
+      const t = tickets[0]
+      console.log(`[Gorgias closed ticket debug] closed_datetime=${t.closed_datetime}, closed_at=${t.closed_at}, status=${t.status}, updated_datetime=${t.updated_datetime}, id=${t.id}`)
+      closedDebugLogged = true
+    }
 
     for (const t of tickets) {
       if (!t.closed_datetime) continue
