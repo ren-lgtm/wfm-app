@@ -140,25 +140,26 @@ export function agentsNeededEmail(expectedTickets) {
 }
 
 // Weekly SLA estimate based on schedule
-export function estimateWeeklySLA(weekSchedule, agents, phoneForecast, emailForecast) {
+// Generalised version — dows is an array of day-of-week strings (e.g. ['Mon','Mon','Tue'])
+// Repeated entries accumulate multiple weeks' worth; empty array returns null.
+export function estimatePeriodSLA(weekSchedule, agents, phoneForecast, emailForecast, dows) {
+  if (!dows || dows.length === 0) return null
   let phoneTotalExpected = 0
   let phoneTotalAnswered = 0
   let emailTotalExpected = 0
   let emailTotalAnswered = 0
 
-  for (const day of ['Mon','Tue','Wed','Thu','Fri']) {
+  for (const day of dows) {
     const agentDaySlots = {}
     for (const agent of agents) {
       agentDaySlots[agent.id] = weekSchedule[agent.id]?.[day] || {}
     }
     const { phoneCov, emailCov } = computeCoverage(agentDaySlots)
-
     for (let h = PHONE_START; h < PHONE_END; h++) {
       const vol = phoneForecast[day]?.[h] || 0
       phoneTotalExpected += vol
       phoneTotalAnswered += Math.min(vol, (phoneCov[h] || 0) * AVG_CALLS_PER_AGENT_HOUR)
     }
-
     for (let h = WORK_START; h < WORK_END; h++) {
       const vol = emailForecast[day]?.[h] || 0
       emailTotalExpected += vol
@@ -175,6 +176,11 @@ export function estimateWeeklySLA(weekSchedule, agents, phoneForecast, emailFore
     emailTotalAnswered: Math.round(emailTotalAnswered),
   }
 }
+
+export function estimateWeeklySLA(weekSchedule, agents, phoneForecast, emailForecast) {
+  return estimatePeriodSLA(weekSchedule, agents, phoneForecast, emailForecast, ['Mon','Tue','Wed','Thu','Fri'])
+}
+
 
 export function coveragePct(agentsOn, expectedCalls) {
   if (!expectedCalls) return 100

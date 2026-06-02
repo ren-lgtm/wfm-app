@@ -1317,6 +1317,7 @@ export default function TimelineView({
   emailForecast: liveEF,
   updateSlot,
   shiftTypes,
+  onViewChange,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
 
@@ -1366,6 +1367,49 @@ export default function TimelineView({
   }, [monthOffset, todayDate])
 
   const weekMonday = useMemo(() => getMondayOfWeek(selectedDate), [selectedDate])
+
+  // Report the effective date range to parent for KPI computation
+  useEffect(() => {
+    if (!onViewChange) return
+    const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri']
+
+    let dows = []
+    let label = ''
+
+    if (viewMode === 'day') {
+      const dow = DAYS_SHORT[getDayOfWeekIdx(selectedDate)]
+      dows = WEEKDAYS.includes(dow) ? [dow] : []
+      label = formatDate(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' })
+    } else if (viewMode === 'week') {
+      dows = [...WEEKDAYS]
+      label = `${formatDate(weekMonday, { month: 'short', day: 'numeric' })} – ${formatDate(addDays(weekMonday, 4), { month: 'short', day: 'numeric' })}`
+    } else if (viewMode === 'month') {
+      const yr = monthDate.getFullYear()
+      const mo = monthDate.getMonth()
+      const last = new Date(yr, mo + 1, 0).getDate()
+      for (let day = 1; day <= last; day++) {
+        const dow = DAYS_SHORT[getDayOfWeekIdx(new Date(yr, mo, day))]
+        if (WEEKDAYS.includes(dow)) dows.push(dow)
+      }
+      label = `${MONTHS_SHORT[mo]} ${yr}`
+    } else if (viewMode === 'custom') {
+      if (customStart && customEnd) {
+        const [sy, sm, sd] = customStart.split('-').map(Number)
+        const [ey, em, ed] = customEnd.split('-').map(Number)
+        const start = new Date(sy, sm - 1, sd)
+        const end   = new Date(ey, em - 1, ed)
+        if (end >= start) {
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dow = DAYS_SHORT[getDayOfWeekIdx(new Date(d))]
+            if (WEEKDAYS.includes(dow)) dows.push(dow)
+          }
+          label = `${customStart} – ${customEnd}`
+        }
+      }
+    }
+
+    onViewChange({ mode: viewMode, dows, label })
+  }, [viewMode, selectedDate, weekMonday, monthDate, customStart, customEnd, onViewChange])
 
   // Navigation
   const prevDay  = () => setSelectedDate(d => addDays(d, -1))

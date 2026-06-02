@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Copy,
   Users, BarChart2, Calendar, MessageSquare, LayoutGrid,
@@ -13,7 +13,7 @@ import SettingsPage from './SettingsPage'
 import {
   DAYS, formatWeekLabel, computeCoverage,
   getPhoneGap, getEmailGap, PHONE_START, PHONE_END,
-  estimateWeeklySLA,
+  estimateWeeklySLA, estimatePeriodSLA,
 } from '../lib/forecast'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -140,11 +140,15 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const [slackMsg,         setSlackMsg]          = useState('')
   const [slackLoading,     setSlackLoading]      = useState(false)
 
-  // ── Derived data for KPI cards ──
-  const weeklySLA = useMemo(() => {
-    if (!agents.length || !forecast.phoneForecast) return null
-    return estimateWeeklySLA(weekSchedule, agents, forecast.phoneForecast, forecast.emailForecast)
-  }, [agents, weekSchedule, forecast])
+  // ── Timeline view info (reported back from TimelineView) ──
+  const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today' })
+  const handleViewChange = useCallback((info) => setViewInfo(info), [])
+
+  // ── KPI data — re-computed whenever the Timeline's date range changes ──
+  const periodSLA = useMemo(() => {
+    if (!agents.length || !forecast.phoneForecast || !viewInfo.dows.length) return null
+    return estimatePeriodSLA(weekSchedule, agents, forecast.phoneForecast, forecast.emailForecast, viewInfo.dows)
+  }, [agents, weekSchedule, forecast, viewInfo.dows])
 
   const slaColor = (pct) =>
     pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
@@ -431,29 +435,31 @@ export default function SchedulePage({ theme, toggleTheme }) {
               </div>
 
               {/* KPI cards */}
-              {weeklySLA && (
+              {periodSLA ? (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Est. phone SLA this week</div>
-                    <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.phoneSLA)}`}>{weeklySLA.phoneSLA}%</div>
+                    <div className="text-xs text-gray-500 mb-1">Est. phone SLA · {viewInfo.label}</div>
+                    <div className={`text-2xl font-mono font-medium ${slaColor(periodSLA.phoneSLA)}`}>{periodSLA.phoneSLA}%</div>
                     <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
                   </div>
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Est. email SLA this week</div>
-                    <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.emailSLA)}`}>{weeklySLA.emailSLA}%</div>
+                    <div className="text-xs text-gray-500 mb-1">Est. email SLA · {viewInfo.label}</div>
+                    <div className={`text-2xl font-mono font-medium ${slaColor(periodSLA.emailSLA)}`}>{periodSLA.emailSLA}%</div>
                     <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
                   </div>
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                     <div className="text-xs text-gray-500 mb-1">Calls covered / expected</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">{weeklySLA.phoneTotalAnswered.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.phoneTotalExpected.toLocaleString()} expected</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">{periodSLA.phoneTotalAnswered.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-600 mt-1">of {periodSLA.phoneTotalExpected.toLocaleString()} expected</div>
                   </div>
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                     <div className="text-xs text-gray-500 mb-1">Emails covered / expected</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">{weeklySLA.emailTotalAnswered.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.emailTotalExpected.toLocaleString()} expected</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">{periodSLA.emailTotalAnswered.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-600 mt-1">of {periodSLA.emailTotalExpected.toLocaleString()} expected</div>
                   </div>
                 </div>
+              ) : viewInfo.dows.length === 0 && (
+                <div className="text-xs text-gray-500 font-mono py-1">No scheduled days in selected range</div>
               )}
 
               <TimelineView
@@ -464,6 +470,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 emailForecast={forecast.emailForecast}
                 updateSlot={updateSlot}
                 shiftTypes={shiftTypes}
+                onViewChange={handleViewChange}
               />
             </>
           )}
