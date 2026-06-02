@@ -98,8 +98,12 @@ body {
 [data-theme="light"] [class*="bg-\[#141922\]"] { background: #FFFFFF !important; }
 [data-theme="light"] [class*="bg-\[#1A1F2E\]"] { background: #EEF1F7 !important; }
 [data-theme="light"] [class*="bg-\[#2A3245\]"] { background: #E2E7F0 !important; }
+[data-theme="light"] [class*="bg-\[#0C0F14\]\/20"] { background: #E8EDF5 !important; }
 [data-theme="light"] [class*="bg-\[#0C0F14\]\/30"] { background: #F4F6FA !important; }
 [data-theme="light"] [class*="bg-\[#0C0F14\]\/40"] { background: #EEF1F7 !important; }
+[data-theme="light"] [class*="bg-\[#0C0F14\]\/60"] { background: #DDE3EF !important; }
+[data-theme="light"] [class*="bg-\[#0C0F14\]\/80"] { background: #D5DCE8 !important; }
+[data-theme="light"] [class*="bg-\[#0F1520\]"]     { background: #DDE3EF !important; }
 
 /* Borders */
 [data-theme="light"] [class*="border-\[#1A1F2E\]"] { border-color: #D0D6E4 !important; }
