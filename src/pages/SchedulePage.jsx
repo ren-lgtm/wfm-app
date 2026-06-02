@@ -374,22 +374,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
           {/* ── TIMELINE ── */}
           {activeView === 'timeline' && (
             <>
-              {/* Week nav + action buttons */}
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <button onClick={goPrevWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
-                      <ChevronLeft size={15} />
-                    </button>
-                    <h2 className="text-base font-semibold text-white">{formatWeekLabel(currentMonday)}</h2>
-                    <button onClick={goNextWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
-                      <ChevronRight size={15} />
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    {new Date(currentMonday).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                  </p>
-                </div>
+              {/* Action buttons */}
+              <div className="flex items-center justify-end flex-wrap gap-3">
 
                 <div className="flex items-center gap-2 flex-wrap">
                   {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
