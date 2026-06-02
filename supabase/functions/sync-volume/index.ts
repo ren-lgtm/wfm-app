@@ -11,10 +11,11 @@ const GORGIAS_SUBDOMAIN = Deno.env.get('GORGIAS_SUBDOMAIN')!
 const GORGIAS_EMAIL     = Deno.env.get('GORGIAS_EMAIL')!
 const GORGIAS_API_KEY   = Deno.env.get('GORGIAS_API_KEY')!
 
-const PHONE_START = 12
-const PHONE_END   = 19
-const ET_OFFSET   = -4
-const DAY_NAMES   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+const PHONE_START       = 12
+const PHONE_END         = 19
+const ET_OFFSET         = -4
+const DAY_NAMES         = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+const TRACKED_CHANNELS  = ['email', 'chat', 'article', 'contact_form']
 
 function etHour(utcTimestamp: number): number {
   return (Math.floor(utcTimestamp / 3600) % 24 + ET_OFFSET + 24) % 24
@@ -114,6 +115,7 @@ async function syncGorgias(targetDate: Date) {
   nextDay.setUTCDate(nextDay.getUTCDate() + 1)
 
   const auth = btoa(`${GORGIAS_EMAIL}:${GORGIAS_API_KEY}`)
+  // ── Count tickets created per hour ──
   const hourCreated: Record<number, number> = {}
   let cursor: string | null = null
   let done = false
@@ -130,7 +132,7 @@ async function syncGorgias(targetDate: Date) {
       const created = new Date(t.created_datetime)
       if (created < cutoff)  { done = true; break }
       if (created >= nextDay) continue
-      if (!['email', 'chat', 'article', 'contact_form'].includes(t.channel)) continue
+      if (!TRACKED_CHANNELS.includes(t.channel)) continue
       const h = (created.getUTCHours() + ET_OFFSET + 24) % 24
       hourCreated[h] = (hourCreated[h] || 0) + 1
     }
@@ -140,18 +142,55 @@ async function syncGorgias(targetDate: Date) {
     await new Promise(r => setTimeout(r, 400))
   }
 
-  const dayName = DAY_NAMES[new Date(dateStr).getUTCDay()]
-  const rows = Object.entries(hourCreated).map(([h, count]) => ({
+  // ── Count tickets closed per hour ──
+  const hourClosed: Record<number, number> = {}
+  cursor = null
+  done   = false
+
+  while (!done) {
+    let url = `https://${GORGIAS_SUBDOMAIN}.gorgias.com/api/tickets?limit=100&order_by=closed_datetime%3Adesc`
+    if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`
+
+    const res  = await fetch(url, { headers: { Authorization: `Basic ${auth}` } })
+    const data = await res.json()
+    const tickets = data.data || []
+
+    for (const t of tickets) {
+      if (!t.closed_datetime) continue                         // skip open tickets
+      const closed = new Date(t.closed_datetime)
+      if (closed < cutoff)  { done = true; break }
+      if (closed >= nextDay) continue
+      if (!TRACKED_CHANNELS.includes(t.channel)) continue
+      const h = (closed.getUTCHours() + ET_OFFSET + 24) % 24
+      hourClosed[h] = (hourClosed[h] || 0) + 1
+    }
+
+    if (!data.meta?.next_cursor || tickets.length < 100) break
+    cursor = data.meta.next_cursor
+    await new Promise(r => setTimeout(r, 400))
+  }
+
+  // ── Merge and upsert ──
+  const dayName  = DAY_NAMES[new Date(dateStr).getUTCDay()]
+  const allHours = new Set([
+    ...Object.keys(hourCreated).map(Number),
+    ...Object.keys(hourClosed).map(Number),
+  ])
+
+  const rows = Array.from(allHours).map(h => ({
     date: dateStr,
-    hour: parseInt(h),
-    tickets_created: count,
+    hour: h,
+    tickets_created:   hourCreated[h] || 0,
     tickets_responded: 0,
+    tickets_closed:    hourClosed[h]  || 0,
     day_of_week: dayName,
-  })).filter(r => r.tickets_created > 0)
+  })).filter(r => r.tickets_created > 0 || r.tickets_closed > 0)
 
   if (rows.length) {
     await supabase.from('email_volume').upsert(rows, { onConflict: 'date,hour' })
-    console.log(`Gorgias: ${rows.length} rows for ${dateStr}`)
+    const totalCreated = Object.values(hourCreated).reduce((a, b) => a + b, 0)
+    const totalClosed  = Object.values(hourClosed).reduce((a, b) => a + b, 0)
+    console.log(`Gorgias: ${rows.length} rows for ${dateStr} (created=${totalCreated}, closed=${totalClosed})`)
   }
 }
 
