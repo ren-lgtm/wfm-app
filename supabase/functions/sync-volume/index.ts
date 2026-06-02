@@ -42,6 +42,7 @@ async function syncAircall(targetDate: Date) {
   const hourCounts: Record<number, number> = {}
   const hourSLA: Record<number, { answered: number; missed: number; waitSecs: number[] }> = {}
 
+  let callCount = 0
   while (hasMore) {
     const res = await fetch(
       `https://api.aircall.io/v1/calls?direction=inbound&from=${from}&to=${to}&per_page=50&page=${page}`,
@@ -49,6 +50,13 @@ async function syncAircall(targetDate: Date) {
     )
     const data  = await res.json()
     const calls = data.calls || []
+
+    // Debug: log first 3 calls' raw fields
+    for (let i = 0; i < Math.min(3, calls.length); i++) {
+      const c = calls[i]
+      console.log(`[Aircall debug call ${callCount + i + 1}] answered_at=${c.answered_at}, duration=${c.duration}, started_at=${c.started_at}, is_answered=${c.is_answered}`)
+    }
+    callCount += calls.length
 
     for (const call of calls) {
       const h            = etHour(call.started_at)
@@ -109,14 +117,20 @@ async function syncAircall(targetDate: Date) {
 }
 
 async function syncGorgias(targetDate: Date) {
-  const dateStr = targetDate.toISOString().split('T')[0]
   const cutoff  = targetDate
   const nextDay = new Date(targetDate)
   nextDay.setUTCDate(nextDay.getUTCDate() + 1)
 
   const auth = btoa(`${GORGIAS_EMAIL}:${GORGIAS_API_KEY}`)
-  // ── Count tickets created per hour ──
-  const hourCreated: Record<number, number> = {}
+
+  // ── Helper: convert UTC timestamp to ET date string ──
+  function etDateFromTimestamp(utcTimestamp: number): string {
+    const d = new Date((utcTimestamp + ET_OFFSET * 3600) * 1000)
+    return d.toISOString().split('T')[0]
+  }
+
+  // ── Count tickets created per hour, grouped by ET date ──
+  const byDateCreated: Record<string, Record<number, number>> = {}
   let cursor: string | null = null
   let done = false
 
@@ -133,8 +147,12 @@ async function syncGorgias(targetDate: Date) {
       if (created < cutoff)  { done = true; break }
       if (created >= nextDay) continue
       if (!TRACKED_CHANNELS.includes(t.channel)) continue
+
+      const etDate = etDateFromTimestamp(Math.floor(created.getTime() / 1000))
       const h = (created.getUTCHours() + ET_OFFSET + 24) % 24
-      hourCreated[h] = (hourCreated[h] || 0) + 1
+
+      if (!byDateCreated[etDate]) byDateCreated[etDate] = {}
+      byDateCreated[etDate][h] = (byDateCreated[etDate][h] || 0) + 1
     }
 
     if (!data.meta?.next_cursor || tickets.length < 100) break
@@ -142,8 +160,8 @@ async function syncGorgias(targetDate: Date) {
     await new Promise(r => setTimeout(r, 400))
   }
 
-  // ── Count tickets closed per hour ──
-  const hourClosed: Record<number, number> = {}
+  // ── Count tickets closed per hour, grouped by ET date ──
+  const byDateClosed: Record<string, Record<number, number>> = {}
   cursor = null
   done   = false
 
@@ -156,13 +174,17 @@ async function syncGorgias(targetDate: Date) {
     const tickets = data.data || []
 
     for (const t of tickets) {
-      if (!t.closed_datetime) continue                         // skip open tickets
+      if (!t.closed_datetime) continue
       const closed = new Date(t.closed_datetime)
       if (closed < cutoff)  { done = true; break }
       if (closed >= nextDay) continue
       if (!TRACKED_CHANNELS.includes(t.channel)) continue
+
+      const etDate = etDateFromTimestamp(Math.floor(closed.getTime() / 1000))
       const h = (closed.getUTCHours() + ET_OFFSET + 24) % 24
-      hourClosed[h] = (hourClosed[h] || 0) + 1
+
+      if (!byDateClosed[etDate]) byDateClosed[etDate] = {}
+      byDateClosed[etDate][h] = (byDateClosed[etDate][h] || 0) + 1
     }
 
     if (!data.meta?.next_cursor || tickets.length < 100) break
@@ -170,27 +192,37 @@ async function syncGorgias(targetDate: Date) {
     await new Promise(r => setTimeout(r, 400))
   }
 
-  // ── Merge and upsert ──
-  const dayName  = DAY_NAMES[new Date(dateStr).getUTCDay()]
-  const allHours = new Set([
-    ...Object.keys(hourCreated).map(Number),
-    ...Object.keys(hourClosed).map(Number),
-  ])
+  // ── Merge by ET date ──
+  const allDates = new Set([...Object.keys(byDateCreated), ...Object.keys(byDateClosed)])
+  const rows = []
 
-  const rows = Array.from(allHours).map(h => ({
-    date: dateStr,
-    hour: h,
-    tickets_created:   hourCreated[h] || 0,
-    tickets_responded: 0,
-    tickets_closed:    hourClosed[h]  || 0,
-    day_of_week: dayName,
-  })).filter(r => r.tickets_created > 0 || r.tickets_closed > 0)
+  for (const etDate of allDates) {
+    const dayName = DAY_NAMES[new Date(etDate + 'T00:00:00Z').getUTCDay()]
+    const hoursByDate = byDateCreated[etDate] || {}
+    const closedByDate = byDateClosed[etDate] || {}
+    const allHours = new Set([...Object.keys(hoursByDate).map(Number), ...Object.keys(closedByDate).map(Number)])
+
+    for (const h of allHours) {
+      const created = hoursByDate[h] || 0
+      const closed = closedByDate[h] || 0
+      if (created > 0 || closed > 0) {
+        rows.push({
+          date: etDate,
+          hour: h,
+          tickets_created: created,
+          tickets_responded: 0,
+          tickets_closed: closed,
+          day_of_week: dayName,
+        })
+      }
+    }
+  }
 
   if (rows.length) {
     await supabase.from('email_volume').upsert(rows, { onConflict: 'date,hour' })
-    const totalCreated = Object.values(hourCreated).reduce((a, b) => a + b, 0)
-    const totalClosed  = Object.values(hourClosed).reduce((a, b) => a + b, 0)
-    console.log(`Gorgias: ${rows.length} rows for ${dateStr} (created=${totalCreated}, closed=${totalClosed})`)
+    const totalCreated = Object.values(byDateCreated).reduce((acc, h) => acc + Object.values(h).reduce((a, b) => a + b, 0), 0)
+    const totalClosed = Object.values(byDateClosed).reduce((acc, h) => acc + Object.values(h).reduce((a, b) => a + b, 0), 0)
+    console.log(`Gorgias: ${rows.length} rows across ${allDates.size} dates (created=${totalCreated}, closed=${totalClosed})`)
   }
 }
 
