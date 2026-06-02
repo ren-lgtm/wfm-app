@@ -601,49 +601,78 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                       <span className="text-xs font-medium text-gray-200 whitespace-nowrap">{agent.name}</span>
                     </div>
                   </td>
-                  {hours.map(h => {
-                    const act       = slots[h]
-                    const cs        = cellStyle(act)
-                    const isCurrent = isToday && h === currentHour
-                    const isPast    = isToday && h < currentHour
-                    const isPhone   = h >= PHONE_START && h < PHONE_END
-                    return (
-                      <td
-                        key={h}
-                        onClick={() => openShiftModal(agent, h, slots)}
-                        className={`py-1 px-0.5 ${canEdit ? 'cursor-pointer' : ''} ${
-                          isCurrent
-                            ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
-                            : isPhone
-                              ? 'bg-emerald-950/20'
-                              : ''
-                        } ${canEdit && !act ? 'hover:bg-[#2A3245]/40' : ''}`}
-                      >
-                        {act && act !== 'off' ? (() => {
-                          const shiftType = shiftTypes?.find(t => t.id === act)
-                          const label = shiftType ? shiftType.name : cs.label
-                          return (
-                            <div
-                              className={`
-                                text-center rounded text-[9px] font-medium py-1 truncate
-                                ${shiftType ? '' : `${cs.bg} ${cs.text}`}
-                                ${isPast ? 'opacity-60' : ''}
-                                ${canEdit ? 'hover:brightness-125 transition-all' : ''}
-                              `}
-                              style={shiftType ? {
-                                background: shiftType.color + '26',
-                                color: shiftType.color,
-                              } : undefined}
-                            >
-                              {label}
-                            </div>
-                          )
-                        })() : (
-                          <div className="h-5" />
-                        )}
-                      </td>
-                    )
-                  })}
+                  {(() => {
+                    // Compute consecutive runs of the same activity
+                    const runs = []
+                    let i = 0
+                    while (i < hours.length) {
+                      const h   = hours[i]
+                      const act = slots[h] || null
+                      if (!act || act === 'off') {
+                        runs.push({ startH: h, endH: h, activity: act, span: 1 })
+                        i++
+                      } else {
+                        let j = i + 1
+                        while (j < hours.length && (slots[hours[j]] || null) === act) j++
+                        runs.push({ startH: h, endH: hours[j - 1], activity: act, span: j - i })
+                        i = j
+                      }
+                    }
+
+                    return runs.map(({ startH, endH, activity, span }) => {
+                      const isCurrent = isToday && startH <= currentHour && currentHour <= endH
+                      const isPast    = isToday && endH < currentHour
+                      const isPhone   = startH >= PHONE_START && endH < PHONE_END
+
+                      if (!activity || activity === 'off') {
+                        return (
+                          <td
+                            key={startH}
+                            onClick={canEdit ? () => openShiftModal(agent, startH, slots) : undefined}
+                            className={`py-1 px-0.5 ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/40' : ''} ${
+                              isCurrent
+                                ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
+                                : isPhone
+                                  ? 'bg-emerald-950/20'
+                                  : ''
+                            }`}
+                          >
+                            <div className="h-5" />
+                          </td>
+                        )
+                      }
+
+                      const shiftType = shiftTypes?.find(t => t.id === activity)
+                      const cs        = cellStyle(activity)
+                      const label     = shiftType ? shiftType.name : cs.label
+
+                      return (
+                        <td
+                          key={startH}
+                          colSpan={span}
+                          onClick={canEdit ? () => openShiftModal(agent, startH, slots) : undefined}
+                          className={`py-1 px-0.5 ${canEdit ? 'cursor-pointer' : ''} ${
+                            isCurrent ? 'border-l-2 border-l-blue-500' : ''
+                          }`}
+                        >
+                          <div
+                            className={`
+                              text-center rounded text-[9px] font-medium py-1 truncate
+                              ${shiftType ? '' : `${cs.bg} ${cs.text}`}
+                              ${isPast ? 'opacity-60' : ''}
+                              ${canEdit ? 'hover:brightness-125 transition-all' : ''}
+                            `}
+                            style={shiftType ? {
+                              background: shiftType.color + '26',
+                              color: shiftType.color,
+                            } : undefined}
+                          >
+                            {label}
+                          </div>
+                        </td>
+                      )
+                    })
+                  })()}
                 </tr>
               )
             })}
