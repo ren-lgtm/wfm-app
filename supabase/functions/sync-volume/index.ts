@@ -110,6 +110,8 @@ async function syncAircall(targetDate: Date) {
       : null,
   }))
 
+  await supabase.from('phone_sla').delete().eq('date', dateStr)
+
   if (slaRows.length) {
     await supabase.from('phone_sla').upsert(slaRows, { onConflict: 'date,hour' })
     console.log(`Aircall SLA: ${slaRows.length} rows for ${dateStr}`)
