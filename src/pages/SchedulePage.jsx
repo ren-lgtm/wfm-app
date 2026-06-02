@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Copy,
-  Users, BarChart2, Calendar, MessageSquare, LayoutGrid,
+  Users, BarChart2, Calendar, LayoutGrid,
   GitBranch, TrendingUp, Clock, Target, Settings,
 } from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
@@ -11,9 +11,7 @@ import TimelineView from '../components/TimelineView'
 import UsersPage from './UsersPage'
 import SettingsPage from './SettingsPage'
 import {
-  DAYS, formatWeekLabel, computeCoverage,
-  getPhoneGap, getEmailGap, PHONE_START, PHONE_END,
-  estimateWeeklySLA, estimatePeriodSLA,
+  DAYS, formatWeekLabel, estimatePeriodSLA,
 } from '../lib/forecast'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -136,9 +134,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const [activeView,       setActiveView]       = useState('timeline')
   const [sidebarOpen,      setSidebarOpen]       = useState(true)
   const [expandedSections, setExpandedSections] = useState({ schedule: true, forecast: false })
-  const [copyMsg,          setCopyMsg]           = useState('')
-  const [slackMsg,         setSlackMsg]          = useState('')
-  const [slackLoading,     setSlackLoading]      = useState(false)
+  const [copyMsg, setCopyMsg] = useState('')
 
   // ── Timeline view info (reported back from TimelineView) ──
   const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today' })
@@ -158,62 +154,6 @@ export default function SchedulePage({ theme, toggleTheme }) {
     const ok = await copyLastWeek()
     setCopyMsg(ok ? 'Copied!' : 'No previous week found')
     setTimeout(() => setCopyMsg(''), 2500)
-  }
-
-  const handleSlackPost = async () => {
-    setSlackLoading(true)
-    setSlackMsg('')
-    try {
-      const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL
-      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/slack-schedule`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          weekLabel: formatWeekLabel(currentMonday),
-          phoneSLA:  weeklySLA?.phoneSLA  || 0,
-          emailSLA:  weeklySLA?.emailSLA  || 0,
-          days: WEEKDAYS.map(day => {
-            const agentDaySlots = {}
-            for (const agent of agents) {
-              agentDaySlots[agent.id] = weekSchedule[agent.id]?.[day] || {}
-            }
-            const { phoneCov: pc } = computeCoverage(agentDaySlots)
-            let gap = 'ok'
-            for (let h = 12; h < 19; h++) {
-              const pg = getPhoneGap(pc[h] || 0, forecast.phoneForecast[day]?.[h] || 0)
-              if (pg === 'critical') { gap = 'critical'; break }
-              if (pg === 'warn')       gap = 'warn'
-            }
-            return {
-              day, gap,
-              agents: agents.map(agent => {
-                const slots  = weekSchedule[agent.id]?.[day] || {}
-                const isOff  = !!slots.off
-                let phoneHrs = 0, emailHrs = 0
-                if (!isOff) {
-                  Object.values(slots).forEach(a => {
-                    if (a === 'phone') phoneHrs++
-                    if (a === 'email') emailHrs++
-                  })
-                }
-                return { name: agent.name, phoneHrs, emailHrs, isOff }
-              }).filter(a => a.isOff || a.phoneHrs > 0 || a.emailHrs > 0),
-            }
-          }),
-        }),
-      })
-      setSlackMsg(res.ok ? 'Posted to Slack!' : 'Failed — check Slack webhook setup')
-    } catch {
-      setSlackMsg('Error posting to Slack')
-    } finally {
-      setSlackLoading(false)
-      setTimeout(() => setSlackMsg(''), 4000)
-    }
   }
 
   // ── Sidebar helpers ──
@@ -413,23 +353,11 @@ export default function SchedulePage({ theme, toggleTheme }) {
                   {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
                   {!saving && saveError && <span className="text-xs text-red-400 font-mono">save failed</span>}
                   {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
-                  {slackMsg && (
-                    <span className={`text-xs font-mono ${slackMsg.includes('Posted') ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {slackMsg}
-                    </span>
-                  )}
                   <button
                     onClick={handleCopyLastWeek}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors"
                   >
                     <Copy size={13} /> Copy last week
-                  </button>
-                  <button
-                    onClick={handleSlackPost}
-                    disabled={slackLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#4A154B] hover:bg-[#611f69] text-gray-200 hover:text-white transition-colors disabled:opacity-40"
-                  >
-                    <MessageSquare size={13} /> {slackLoading ? 'Posting…' : 'Post to Slack'}
                   </button>
                 </div>
               </div>
