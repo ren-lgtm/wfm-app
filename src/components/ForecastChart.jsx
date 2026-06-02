@@ -17,10 +17,10 @@ function slaColor(pct) {
   return '#E24B4A'
 }
 
-export function ForecastChart({ phoneForecast, emailForecast, slaData }) {
+export function ForecastChart({ phoneForecast, emailForecast, slaData, section: sectionProp }) {
   const [channel, setChannel] = useState('phone')
   const [selectedDay, setSelectedDay] = useState('Tue')
-  const [activeSection, setActiveSection] = useState('volume')
+  const [activeSection, setActiveSection] = useState(sectionProp || 'volume')
 
   const forecast = channel === 'phone' ? phoneForecast : emailForecast
   const hours = Array.from({ length: WORK_END - WORK_START }, (_, i) => i + WORK_START)
@@ -41,26 +41,28 @@ export function ForecastChart({ phoneForecast, emailForecast, slaData }) {
   return (
     <div className="space-y-6">
 
-      {/* Section tabs */}
-      <div className="flex gap-2">
-        {[
-          { id: 'volume', label: 'Volume forecast' },
-          { id: 'baseline', label: 'Historical SLA' },
-          { id: 'targets', label: 'Staffing targets' },
-        ].map(s => (
-          <button
-            key={s.id}
-            onClick={() => setActiveSection(s.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-              activeSection === s.id
-                ? 'bg-[#2A3245] border-[#3D4A6B] text-white'
-                : 'bg-[#141922] border-[#2A3245] text-gray-400 hover:text-white'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {/* Section tabs — hidden when section is controlled by the sidebar */}
+      {!sectionProp && (
+        <div className="flex gap-2">
+          {[
+            { id: 'volume', label: 'Volume forecast' },
+            { id: 'baseline', label: 'Historical SLA' },
+            { id: 'targets', label: 'Staffing targets' },
+          ].map(s => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                activeSection === s.id
+                  ? 'bg-[#2A3245] border-[#3D4A6B] text-white'
+                  : 'bg-[#141922] border-[#2A3245] text-gray-400 hover:text-white'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── VOLUME FORECAST ── */}
       {activeSection === 'volume' && (

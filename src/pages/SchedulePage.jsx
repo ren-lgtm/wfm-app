@@ -1,23 +1,54 @@
 import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Plus, Users, BarChart2, Calendar, MessageSquare, LayoutGrid, GitBranch } from 'lucide-react'
+import {
+  ChevronLeft, ChevronRight, ChevronDown, Copy,
+  Users, BarChart2, Calendar, MessageSquare, LayoutGrid,
+  GitBranch, TrendingUp, Clock, Target, Menu,
+} from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
-import { ScheduleGrid } from '../components/ScheduleGrid'
-import { CoverageBar } from '../components/CoverageBar'
-import { WeeklySummary } from '../components/WeeklySummary'
 import { ForecastChart } from '../components/ForecastChart'
-import { AgentModal } from '../components/AgentModal'
-import { GapBadge } from '../components/GapBadge'
 import TimelineView from '../components/TimelineView'
+import UsersPage from './UsersPage'
 import {
   DAYS, formatWeekLabel, computeCoverage,
   getPhoneGap, getEmailGap, PHONE_START, PHONE_END,
-  estimateWeeklySLA, toISODate, getMondayOfWeek
+  estimateWeeklySLA,
 } from '../lib/forecast'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
-function MultiWeekView({ agents, currentMonday, goToWeek, setActiveTab, setActiveDay, forecast }) {
-  // Show 4 weeks starting from current
+// ─── Sidebar nav ─────────────────────────────────────────────────────────────
+
+const NAV = [
+  {
+    id: 'schedule',
+    label: 'Schedule',
+    icon: Calendar,
+    children: [
+      { id: 'timeline',  label: 'Timeline',    icon: GitBranch },
+      { id: 'multiweek', label: '4-Week View', icon: LayoutGrid },
+    ],
+  },
+  {
+    id: 'forecast',
+    label: 'Forecast',
+    icon: BarChart2,
+    children: [
+      { id: 'forecast-volume',  label: 'Volume Forecast',  icon: TrendingUp },
+      { id: 'forecast-sla',     label: 'Historical SLA',   icon: Clock },
+      { id: 'forecast-targets', label: 'Staffing Targets', icon: Target },
+    ],
+  },
+  {
+    id: 'users',
+    label: 'Users',
+    icon: Users,
+    children: null,
+  },
+]
+
+// ─── 4-Week View ─────────────────────────────────────────────────────────────
+
+function MultiWeekView({ agents, currentMonday, goToWeek, onOpenTimeline, forecast }) {
   const weeks = Array.from({ length: 4 }, (_, i) => {
     const mon = new Date(currentMonday)
     mon.setDate(mon.getDate() + i * 7)
@@ -28,163 +59,104 @@ function MultiWeekView({ agents, currentMonday, goToWeek, setActiveTab, setActiv
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-white">4-Week Overview</h2>
-        <p className="text-xs text-gray-500">Click any day to jump to that week's schedule</p>
+        <p className="text-xs text-gray-500">Click any day to jump to that week</p>
       </div>
 
-      {weeks.map((monday, wi) => {
-        const weekLabel = formatWeekLabel(monday)
-        return (
-          <div key={wi} className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
-            {/* Week header */}
-            <div className="px-5 py-3 border-b border-[#2A3245] flex items-center justify-between">
-              <span className="text-xs font-medium text-white font-mono">{weekLabel}</span>
-              <button
-                onClick={() => { goToWeek(monday); setActiveTab('schedule') }}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                Open week →
-              </button>
-            </div>
-
-            {/* Day columns */}
-            <div className="grid grid-cols-5 divide-x divide-[#2A3245]">
-              {WEEKDAYS.map(day => {
-                const dayDate = new Date(monday)
-                dayDate.setDate(dayDate.getDate() + ['Mon','Tue','Wed','Thu','Fri'].indexOf(day))
-                const dateNum = dayDate.getDate()
-                const month = dayDate.toLocaleDateString('en-US', { month: 'short' })
-
-                return (
-                  <button
-                    key={day}
-                    onClick={() => { goToWeek(monday); setActiveDay(day); setActiveTab('schedule') }}
-                    className="p-3 text-left hover:bg-[#2A3245]/40 transition-colors"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-medium text-gray-400">{day}</span>
-                      <span className="text-[10px] text-gray-600 font-mono">{month} {dateNum}</span>
-                    </div>
-
-                    {/* Agent pills */}
-                    <div className="space-y-1">
-                      {agents.slice(0, 5).map(agent => {
-                        return (
-                          <div key={agent.id} className="flex items-center gap-1">
-                            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: agent.color }} />
-                            <span className="text-[9px] text-gray-500 truncate">{agent.name}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+      {weeks.map((monday, wi) => (
+        <div key={wi} className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#2A3245] flex items-center justify-between">
+            <span className="text-xs font-medium text-white font-mono">{formatWeekLabel(monday)}</span>
+            <button
+              onClick={() => { goToWeek(monday); onOpenTimeline() }}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Open week →
+            </button>
           </div>
-        )
-      })}
+
+          <div className="grid grid-cols-5 divide-x divide-[#2A3245]">
+            {WEEKDAYS.map(day => {
+              const dayDate = new Date(monday)
+              dayDate.setDate(dayDate.getDate() + WEEKDAYS.indexOf(day))
+              const dateNum = dayDate.getDate()
+              const month   = dayDate.toLocaleDateString('en-US', { month: 'short' })
+
+              return (
+                <button
+                  key={day}
+                  onClick={() => { goToWeek(monday); onOpenTimeline() }}
+                  className="p-3 text-left hover:bg-[#2A3245]/40 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-medium text-gray-400">{day}</span>
+                    <span className="text-[10px] text-gray-600 font-mono">{month} {dateNum}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {agents.slice(0, 5).map(agent => (
+                      <div key={agent.id} className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: agent.color }} />
+                        <span className="text-[9px] text-gray-500 truncate">{agent.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
 
+// ─── Main app ─────────────────────────────────────────────────────────────────
+
 export default function SchedulePage({ theme, toggleTheme }) {
   const {
-    agents, currentMonday, weekSchedule, forecast, slaData, loading, saving,
-    saveError, loadError,
-    dayNotes, updateDayNote,
-    updateSlot, markOff, unmarkOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
-    goNextWeek, goPrevWeek, goToWeek, getAgentWeekHours
+    agents, currentMonday, weekSchedule, forecast, slaData, saving, saveError, loadError,
+    copyLastWeek, goNextWeek, goPrevWeek, goToWeek,
   } = useSchedule()
 
-  const [activeDay, setActiveDay] = useState('Mon')
-  const [activeTab, setActiveTab] = useState('schedule')
-  const [agentModal, setAgentModal] = useState(null)
-  const [copyMsg, setCopyMsg] = useState('')
-  const [editingNote, setEditingNote] = useState(false)
-  const [noteValue, setNoteValue] = useState('')
-  const [slackMsg, setSlackMsg] = useState('')
-  const [slackLoading, setSlackLoading] = useState(false)
+  const [activeView,       setActiveView]       = useState('timeline')
+  const [sidebarOpen,      setSidebarOpen]       = useState(true)
+  const [expandedSections, setExpandedSections] = useState({ schedule: true, forecast: false })
+  const [copyMsg,          setCopyMsg]           = useState('')
+  const [slackMsg,         setSlackMsg]          = useState('')
+  const [slackLoading,     setSlackLoading]      = useState(false)
 
-  const daySlots = useMemo(() => {
-    const slots = {}
-    for (const agent of agents) {
-      slots[agent.id] = weekSchedule[agent.id]?.[activeDay] || {}
-    }
-    return slots
-  }, [agents, weekSchedule, activeDay])
-
-  const { phoneCov, emailCov } = useMemo(() => {
-    const agentDaySlots = {}
-    for (const agent of agents) {
-      agentDaySlots[agent.id] = weekSchedule[agent.id]?.[activeDay] || {}
-    }
-    return computeCoverage(agentDaySlots)
-  }, [agents, weekSchedule, activeDay])
-
+  // ── Derived data for KPI cards ──
   const weeklySLA = useMemo(() => {
     if (!agents.length || !forecast.phoneForecast) return null
     return estimateWeeklySLA(weekSchedule, agents, forecast.phoneForecast, forecast.emailForecast)
   }, [agents, weekSchedule, forecast])
 
-  const dayGaps = useMemo(() => {
-    const gaps = {}
-    for (const day of WEEKDAYS) {
-      const agentDaySlots = {}
-      for (const agent of agents) {
-        agentDaySlots[agent.id] = weekSchedule[agent.id]?.[day] || {}
-      }
-      const { phoneCov: pc, emailCov: ec } = computeCoverage(agentDaySlots)
-      let worst = 'ok'
-      for (let h = PHONE_START; h < PHONE_END; h++) {
-        const pg = getPhoneGap(pc[h] || 0, forecast.phoneForecast[day]?.[h] || 0)
-        const eg = getEmailGap(ec[h] || 0, forecast.emailForecast[day]?.[h] || 0)
-        if (pg === 'critical' || eg === 'critical') { worst = 'critical'; break }
-        if (pg === 'warn' || eg === 'warn') worst = 'warn'
-      }
-      gaps[day] = worst
-    }
-    return gaps
-  }, [agents, weekSchedule, forecast])
+  const slaColor = (pct) =>
+    pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
 
+  // ── Handlers ──
   const handleCopyLastWeek = async () => {
     const ok = await copyLastWeek()
     setCopyMsg(ok ? 'Copied!' : 'No previous week found')
     setTimeout(() => setCopyMsg(''), 2500)
   }
 
-  const handleSaveAgent = async (form) => {
-    if (agentModal === 'new') await addAgent(form)
-    else await updateAgent(agentModal.id, form)
-    setAgentModal(null)
-  }
-
-  const handleNoteEdit = () => {
-    setNoteValue(dayNotes[activeDay] || '')
-    setEditingNote(true)
-  }
-
-  const handleNoteSave = async () => {
-    await updateDayNote(activeDay, noteValue)
-    setEditingNote(false)
-  }
-
   const handleSlackPost = async () => {
     setSlackLoading(true)
     setSlackMsg('')
     try {
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+      const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL
       const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/slack-schedule`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           weekLabel: formatWeekLabel(currentMonday),
-          phoneSLA: weeklySLA?.phoneSLA || 0,
-          emailSLA: weeklySLA?.emailSLA || 0,
+          phoneSLA:  weeklySLA?.phoneSLA  || 0,
+          emailSLA:  weeklySLA?.emailSLA  || 0,
           days: WEEKDAYS.map(day => {
             const agentDaySlots = {}
             for (const agent of agents) {
@@ -195,15 +167,13 @@ export default function SchedulePage({ theme, toggleTheme }) {
             for (let h = 12; h < 19; h++) {
               const pg = getPhoneGap(pc[h] || 0, forecast.phoneForecast[day]?.[h] || 0)
               if (pg === 'critical') { gap = 'critical'; break }
-              if (pg === 'warn') gap = 'warn'
+              if (pg === 'warn')       gap = 'warn'
             }
             return {
-              day,
-              note: dayNotes[day] || null,
-              gap,
+              day, gap,
               agents: agents.map(agent => {
-                const slots = weekSchedule[agent.id]?.[day] || {}
-                const isOff = !!slots.off
+                const slots  = weekSchedule[agent.id]?.[day] || {}
+                const isOff  = !!slots.off
                 let phoneHrs = 0, emailHrs = 0
                 if (!isOff) {
                   Object.values(slots).forEach(a => {
@@ -212,18 +182,13 @@ export default function SchedulePage({ theme, toggleTheme }) {
                   })
                 }
                 return { name: agent.name, phoneHrs, emailHrs, isOff }
-              }).filter(a => a.isOff || a.phoneHrs > 0 || a.emailHrs > 0)
+              }).filter(a => a.isOff || a.phoneHrs > 0 || a.emailHrs > 0),
             }
-          })
-        })
+          }),
+        }),
       })
-
-      if (res.ok) {
-        setSlackMsg('Posted to Slack!')
-      } else {
-        setSlackMsg('Failed — check Slack webhook setup')
-      }
-    } catch (err) {
+      setSlackMsg(res.ok ? 'Posted to Slack!' : 'Failed — check Slack webhook setup')
+    } catch {
       setSlackMsg('Error posting to Slack')
     } finally {
       setSlackLoading(false)
@@ -231,341 +196,304 @@ export default function SchedulePage({ theme, toggleTheme }) {
     }
   }
 
-  const gapDot = { critical: 'bg-red-500', warn: 'bg-amber-500', ok: 'bg-emerald-500', none: 'bg-gray-600' }
-  const slaColor = (pct) => pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
+  // ── Sidebar helpers ──
+  const toggleSection = (id) =>
+    setExpandedSections(s => ({ ...s, [id]: !s[id] }))
+
+  const handleSectionHeaderClick = (item) => {
+    if (!sidebarOpen) {
+      setSidebarOpen(true)
+      setExpandedSections(s => ({ ...s, [item.id]: true }))
+    } else {
+      toggleSection(item.id)
+    }
+  }
+
+  const isViewUnderSection = (sectionId) =>
+    NAV.find(n => n.id === sectionId)?.children?.some(c => c.id === activeView)
+
+  // ── Section prop map for ForecastChart ──
+  const FORECAST_SECTION = {
+    'forecast-volume':  'volume',
+    'forecast-sla':     'baseline',
+    'forecast-targets': 'targets',
+  }
 
   return (
-    <div className="min-h-screen bg-[#0C0F14] text-gray-200">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
 
-      <header className="border-b border-[#1A1F2E] px-6 py-4 flex items-center justify-between" style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-secondary)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">W</div>
-          <div>
-            <h1 className="text-sm font-semibold leading-none" style={{ color: 'var(--text-primary)' }}>WFM</h1>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>CX Staffing</p>
-          </div>
-        </div>
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-lg transition-colors text-sm"
-          style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      {/* ─── Sidebar ─────────────────────────────────────────────────────────── */}
+      <aside
+        className={`flex flex-col shrink-0 border-r transition-all duration-200 ${sidebarOpen ? 'w-56' : 'w-14'}`}
+        style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-secondary)' }}
+      >
+        {/* Logo row */}
+        <div
+          className="flex items-center px-3 py-4 border-b"
+          style={{ borderColor: 'var(--border-primary)', minHeight: 57 }}
         >
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
-      </header>
-
-      {/* Tab nav */}
-      <div className="border-b border-[#1A1F2E] px-6">
-        <div className="flex gap-0">
-          {[
-            { id: 'schedule', icon: Calendar, label: 'Schedule' },
-            { id: 'multiweek', icon: LayoutGrid, label: '4-Week View' },
-            { id: 'timeline', icon: GitBranch, label: 'Timeline' },
-            { id: 'forecast', icon: BarChart2, label: 'Forecast' },
-            { id: 'agents', icon: Users, label: 'Agents' },
-          ].map(({ id, icon: Icon, label }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm border-b-2 transition-colors ${activeTab === id ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
-            >
-              <Icon size={14} /> {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <main className="p-6 space-y-6 max-w-[1400px] mx-auto">
-
-        {/* ── Error banners ── */}
-        {loadError && (
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-950/60 border border-red-800/60 text-sm text-red-300">
-            <span className="font-semibold shrink-0">Load error:</span>
-            <span className="font-mono text-xs">{loadError}</span>
-          </div>
-        )}
-        {saveError && (
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-950/60 border border-red-800/60 text-sm text-red-300">
-            <span className="font-semibold shrink-0">Save error — change was not saved:</span>
-            <span className="font-mono text-xs">{saveError}</span>
-          </div>
-        )}
-
-        {/* ── SCHEDULE TAB ── */}
-        {activeTab === 'schedule' && (
-          <>
-            {/* Week date + actions bar */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                <button onClick={goPrevWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
-                  <ChevronLeft size={15} />
-                </button>
-                <h2 className="text-base font-semibold text-white">{formatWeekLabel(currentMonday)}</h2>
-                <button onClick={goNextWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
-                  <ChevronRight size={15} />
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">
-                {new Date(currentMonday).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-              </p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
-                {!saving && saveError && <span className="text-xs text-red-400 font-mono">save failed</span>}
-                {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
-                {slackMsg && <span className={`text-xs font-mono ${slackMsg.includes('Posted') ? 'text-emerald-400' : 'text-red-400'}`}>{slackMsg}</span>}
-                <button
-                  onClick={handleCopyLastWeek}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors"
-                >
-                  <Copy size={13} /> Copy last week
-                </button>
-                <button
-                  onClick={handleSlackPost}
-                  disabled={slackLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#4A154B] hover:bg-[#611f69] text-gray-200 hover:text-white transition-colors disabled:opacity-40"
-                >
-                  <MessageSquare size={13} /> {slackLoading ? 'Posting...' : 'Post to Slack'}
-                </button>
-              </div>
-            </div>
-
-            {/* Weekly SLA cards */}
-            {weeklySLA && (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                  <div className="text-xs text-gray-500 mb-1">Est. phone SLA this week</div>
-                  <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.phoneSLA)}`}>{weeklySLA.phoneSLA}%</div>
-                  <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
-                </div>
-                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                  <div className="text-xs text-gray-500 mb-1">Est. email SLA this week</div>
-                  <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.emailSLA)}`}>{weeklySLA.emailSLA}%</div>
-                  <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
-                </div>
-                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                  <div className="text-xs text-gray-500 mb-1">Calls covered / expected</div>
-                  <div className="text-2xl font-mono font-medium text-gray-300">{weeklySLA.phoneTotalAnswered.toLocaleString()}</div>
-                  <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.phoneTotalExpected.toLocaleString()} expected</div>
-                </div>
-                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                  <div className="text-xs text-gray-500 mb-1">Emails covered / expected</div>
-                  <div className="text-2xl font-mono font-medium text-gray-300">{weeklySLA.emailTotalAnswered.toLocaleString()}</div>
-                  <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.emailTotalExpected.toLocaleString()} expected</div>
+          {sidebarOpen ? (
+            <>
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0">W</div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold leading-none" style={{ color: 'var(--text-primary)' }}>WFM</div>
+                  <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>CX Staffing</div>
                 </div>
               </div>
-            )}
-
-            {/* Day tabs */}
-            <div className="flex gap-2 flex-wrap">
-              {WEEKDAYS.map(day => {
-                const gap = dayGaps[day] || 'ok'
-                const note = dayNotes[day]
-                const dayDate = new Date(currentMonday)
-                dayDate.setDate(dayDate.getDate() + WEEKDAYS.indexOf(day))
-                const dateNum = dayDate.getDate()
-                const month = dayDate.toLocaleDateString('en-US', { month: 'short' })
-                return (
-                  <button
-                    key={day}
-                    onClick={() => setActiveDay(day)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
-                      activeDay === day
-                        ? 'bg-[#2A3245] border-[#3D4A6B] text-white'
-                        : 'bg-[#141922] border-[#2A3245] text-gray-400 hover:text-white hover:border-[#3D4A6B]'
-                    }`}
-                  >
-                    <span>{day}</span>
-                    <span className="text-[10px] text-gray-500 font-mono">{month} {dateNum}</span>
-                    {note && <span className="text-[9px] text-amber-400">📝</span>}
-                    <span className={`w-1.5 h-1.5 rounded-full ${gapDot[gap]}`} />
-                  </button>
-                )
-              })}
-            </div>
-
-            {loading ? (
-              <div className="text-center py-20 text-gray-600 font-mono text-sm">Loading schedule…</div>
-            ) : (
-              <>
-                {/* Schedule grid */}
-                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-sm font-semibold text-white">{activeDay} · {(() => { const d = new Date(currentMonday); d.setDate(d.getDate() + WEEKDAYS.indexOf(activeDay)); return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) })()}</h2>
-                      <p className="text-xs text-gray-500 mt-0.5">Click any cell to cycle: Phone → Email → Lunch → Off → Empty</p>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded cell-phone inline-block" /> Phone</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded cell-email inline-block" /> Email</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-2 rounded cell-lunch inline-block" /> Lunch</span>
-                    </div>
-                  </div>
-
-                  {/* Day note */}
-                  <div className="mb-4">
-                    {editingNote ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={noteValue}
-                          onChange={e => setNoteValue(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleNoteSave(); if (e.key === 'Escape') setEditingNote(false) }}
-                          placeholder={`Add a note for ${activeDay}...`}
-                          autoFocus
-                          className="flex-1 bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-                        />
-                        <button onClick={handleNoteSave} className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors">Save</button>
-                        <button onClick={() => setEditingNote(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-white transition-colors">Cancel</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={handleNoteEdit}
-                        className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-300 transition-colors"
-                      >
-                        <MessageSquare size={11} />
-                        {dayNotes[activeDay]
-                          ? <span className="text-amber-400">{dayNotes[activeDay]}</span>
-                          : <span>Add note for {activeDay}…</span>
-                        }
-                      </button>
-                    )}
-                  </div>
-
-                  <ScheduleGrid
-                    agents={agents}
-                    daySlots={daySlots}
-                    day={activeDay}
-                    onUpdateSlot={(agentId, hour, activity) => updateSlot(agentId, activeDay, hour, activity)}
-                    onMarkOff={(agentId) => markOff(agentId, activeDay)}
-                    onUnmarkOff={(agentId) => unmarkOff(agentId, activeDay)}
-                  />
-                </div>
-
-                {/* Coverage bar */}
-                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                    <div>
-                      <h2 className="text-sm font-semibold text-white">Coverage Analysis</h2>
-                      <p className="text-xs text-gray-500 mt-0.5">SLA % = estimated calls/emails handled ÷ expected volume. Target: 95%. Hover any cell for detail.</p>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <GapBadge status="ok">≥80%</GapBadge>
-                      <GapBadge status="warn">50–80%</GapBadge>
-                      <GapBadge status="critical">&lt;50%</GapBadge>
-                    </div>
-                  </div>
-                  <CoverageBar
-                    phoneCov={phoneCov}
-                    emailCov={emailCov}
-                    phoneForecast={forecast.phoneForecast}
-                    emailForecast={forecast.emailForecast}
-                    day={activeDay}
-                  />
-                </div>
-
-                {/* Weekly summary */}
-                <WeeklySummary
-                  agents={agents}
-                  weekSchedule={weekSchedule}
-                  getAgentWeekHours={getAgentWeekHours}
-                />
-              </>
-            )}
-          </>
-        )}
-
-        {/* ── MULTI-WEEK TAB ── */}
-        {activeTab === 'multiweek' && (
-          <MultiWeekView
-            agents={agents}
-            currentMonday={currentMonday}
-            goToWeek={goToWeek}
-            setActiveTab={setActiveTab}
-            setActiveDay={setActiveDay}
-            forecast={forecast}
-          />
-        )}
-
-        {/* ── TIMELINE TAB ── */}
-        {activeTab === 'timeline' && (
-          <TimelineView
-            agents={agents}
-            weekSchedule={weekSchedule}
-            currentMonday={currentMonday}
-            phoneForecast={forecast.phoneForecast}
-            emailForecast={forecast.emailForecast}
-          />
-        )}
-
-        {/* ── FORECAST TAB ── */}
-        {activeTab === 'forecast' && (
-          <ForecastChart
-            phoneForecast={forecast.phoneForecast}
-            emailForecast={forecast.emailForecast}
-            slaData={slaData}
-          />
-        )}
-
-        {/* ── AGENTS TAB ── */}
-        {activeTab === 'agents' && (
-          <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#2A3245] flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Agent Roster</h2>
               <button
-                onClick={() => setAgentModal('new')}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
+                onClick={() => setSidebarOpen(false)}
+                className="p-1 rounded-lg transition-colors shrink-0"
+                style={{ color: 'var(--text-tertiary)' }}
+                title="Collapse sidebar"
               >
-                <Plus size={13} /> Add agent
+                <ChevronLeft size={14} />
               </button>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#1A1F2E] text-xs text-gray-500">
-                  <th className="text-left px-5 py-3 font-medium">Name</th>
-                  <th className="text-left px-3 py-3 font-medium">Role</th>
-                  <th className="text-left px-3 py-3 font-medium">Default channel</th>
-                  <th className="text-right px-5 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {agents.map((agent, i) => (
-                  <tr key={agent.id} className={`border-b border-[#1A1F2E] ${i % 2 === 0 ? '' : 'bg-[#0C0F14]/30'}`}>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: agent.color }}>
-                          {agent.name[0]}
-                        </div>
-                        <span className="text-gray-200 font-medium">{agent.name}</span>
-                        {agent.email && <span className="text-gray-600 text-xs">{agent.email}</span>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-gray-400 text-xs capitalize">{agent.role}</td>
-                    <td className="px-3 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${agent.default_channel === 'phone' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-blue-900/50 text-blue-400'}`}>
-                        {agent.default_channel}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <button onClick={() => setAgentModal(agent)} className="text-xs text-gray-500 hover:text-white transition-colors mr-3">Edit</button>
-                      <button onClick={() => { if (confirm(`Remove ${agent.name}?`)) deactivateAgent(agent.id) }} className="text-xs text-red-600 hover:text-red-400 transition-colors">Remove</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </main>
+            </>
+          ) : (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm mx-auto"
+              title="Expand sidebar"
+            >
+              W
+            </button>
+          )}
+        </div>
 
-      {agentModal && (
-        <AgentModal
-          agent={agentModal === 'new' ? null : agentModal}
-          onSave={handleSaveAgent}
-          onClose={() => setAgentModal(null)}
-        />
-      )}
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+          {NAV.map(item => {
+            const Icon = item.icon
+
+            // Single-level item (Users)
+            if (!item.children) {
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveView(item.id)}
+                  title={!sidebarOpen ? item.label : undefined}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    activeView === item.id
+                      ? 'bg-[#2A3245] text-white'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E]'
+                  } ${!sidebarOpen ? 'justify-center' : ''}`}
+                >
+                  <Icon size={15} className="shrink-0" />
+                  {sidebarOpen && <span>{item.label}</span>}
+                </button>
+              )
+            }
+
+            // Section with children
+            const isExpanded  = expandedSections[item.id]
+            const sectionActive = isViewUnderSection(item.id)
+
+            return (
+              <div key={item.id}>
+                <button
+                  onClick={() => handleSectionHeaderClick(item)}
+                  title={!sidebarOpen ? item.label : undefined}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
+                    sectionActive && !isExpanded
+                      ? 'bg-[#2A3245] text-white'
+                      : 'text-gray-500 hover:text-gray-400 hover:bg-[#1A1F2E]'
+                  } ${!sidebarOpen ? 'justify-center' : ''}`}
+                >
+                  <Icon size={15} className="shrink-0" />
+                  {sidebarOpen && (
+                    <>
+                      <span className="flex-1 text-left">{item.label}</span>
+                      <ChevronDown
+                        size={12}
+                        className={`transition-transform duration-150 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                      />
+                    </>
+                  )}
+                </button>
+
+                {sidebarOpen && isExpanded && (
+                  <div className="mt-0.5 ml-3 pl-3 border-l border-[#2A3245] space-y-0.5 pb-1">
+                    {item.children.map(child => {
+                      const CIcon = child.icon
+                      return (
+                        <button
+                          key={child.id}
+                          onClick={() => setActiveView(child.id)}
+                          className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
+                            activeView === child.id
+                              ? 'bg-[#2A3245] text-white'
+                              : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1F2E]'
+                          }`}
+                        >
+                          <CIcon size={13} className="shrink-0" />
+                          <span>{child.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </nav>
+
+        {/* Bottom: theme toggle */}
+        <div className="px-2 py-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
+          <button
+            onClick={toggleTheme}
+            title={!sidebarOpen ? (theme === 'dark' ? 'Light mode' : 'Dark mode') : undefined}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E] w-full ${!sidebarOpen ? 'justify-center' : ''}`}
+          >
+            <span className="text-base leading-none">{theme === 'dark' ? '☀️' : '🌙'}</span>
+            {sidebarOpen && (
+              <span className="text-xs">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            )}
+          </button>
+        </div>
+      </aside>
+
+      {/* ─── Main content ────────────────────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+
+          {/* Error banners */}
+          {loadError && (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-950/60 border border-red-800/60 text-sm text-red-300">
+              <span className="font-semibold shrink-0">Load error:</span>
+              <span className="font-mono text-xs">{loadError}</span>
+            </div>
+          )}
+          {saveError && (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-950/60 border border-red-800/60 text-sm text-red-300">
+              <span className="font-semibold shrink-0">Save error — change was not saved:</span>
+              <span className="font-mono text-xs">{saveError}</span>
+            </div>
+          )}
+
+          {/* ── TIMELINE ── */}
+          {activeView === 'timeline' && (
+            <>
+              {/* Week nav + action buttons */}
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <button onClick={goPrevWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                      <ChevronLeft size={15} />
+                    </button>
+                    <h2 className="text-base font-semibold text-white">{formatWeekLabel(currentMonday)}</h2>
+                    <button onClick={goNextWeek} className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-white transition-colors">
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {new Date(currentMonday).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
+                  {!saving && saveError && <span className="text-xs text-red-400 font-mono">save failed</span>}
+                  {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
+                  {slackMsg && (
+                    <span className={`text-xs font-mono ${slackMsg.includes('Posted') ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {slackMsg}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleCopyLastWeek}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors"
+                  >
+                    <Copy size={13} /> Copy last week
+                  </button>
+                  <button
+                    onClick={handleSlackPost}
+                    disabled={slackLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#4A154B] hover:bg-[#611f69] text-gray-200 hover:text-white transition-colors disabled:opacity-40"
+                  >
+                    <MessageSquare size={13} /> {slackLoading ? 'Posting…' : 'Post to Slack'}
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI cards */}
+              {weeklySLA && (
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                    <div className="text-xs text-gray-500 mb-1">Est. phone SLA this week</div>
+                    <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.phoneSLA)}`}>{weeklySLA.phoneSLA}%</div>
+                    <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
+                  </div>
+                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                    <div className="text-xs text-gray-500 mb-1">Est. email SLA this week</div>
+                    <div className={`text-2xl font-mono font-medium ${slaColor(weeklySLA.emailSLA)}`}>{weeklySLA.emailSLA}%</div>
+                    <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
+                  </div>
+                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                    <div className="text-xs text-gray-500 mb-1">Calls covered / expected</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">{weeklySLA.phoneTotalAnswered.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.phoneTotalExpected.toLocaleString()} expected</div>
+                  </div>
+                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                    <div className="text-xs text-gray-500 mb-1">Emails covered / expected</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">{weeklySLA.emailTotalAnswered.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-600 mt-1">of {weeklySLA.emailTotalExpected.toLocaleString()} expected</div>
+                  </div>
+                </div>
+              )}
+
+              <TimelineView
+                agents={agents}
+                weekSchedule={weekSchedule}
+                currentMonday={currentMonday}
+                phoneForecast={forecast.phoneForecast}
+                emailForecast={forecast.emailForecast}
+              />
+            </>
+          )}
+
+          {/* ── 4-WEEK VIEW ── */}
+          {activeView === 'multiweek' && (
+            <MultiWeekView
+              agents={agents}
+              currentMonday={currentMonday}
+              goToWeek={goToWeek}
+              onOpenTimeline={() => setActiveView('timeline')}
+              forecast={forecast}
+            />
+          )}
+
+          {/* ── FORECAST SECTIONS ── */}
+          {activeView === 'forecast-volume' && (
+            <ForecastChart
+              section="volume"
+              phoneForecast={forecast.phoneForecast}
+              emailForecast={forecast.emailForecast}
+              slaData={slaData}
+            />
+          )}
+          {activeView === 'forecast-sla' && (
+            <ForecastChart
+              section="baseline"
+              phoneForecast={forecast.phoneForecast}
+              emailForecast={forecast.emailForecast}
+              slaData={slaData}
+            />
+          )}
+          {activeView === 'forecast-targets' && (
+            <ForecastChart
+              section="targets"
+              phoneForecast={forecast.phoneForecast}
+              emailForecast={forecast.emailForecast}
+              slaData={slaData}
+            />
+          )}
+
+          {/* ── USERS ── */}
+          {activeView === 'users' && <UsersPage />}
+
+        </div>
+      </main>
     </div>
   )
 }
