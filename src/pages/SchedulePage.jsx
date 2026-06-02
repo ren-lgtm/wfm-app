@@ -2,12 +2,14 @@ import { useState, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Copy,
   Users, BarChart2, Calendar, MessageSquare, LayoutGrid,
-  GitBranch, TrendingUp, Clock, Target, Menu,
+  GitBranch, TrendingUp, Clock, Target, Settings,
 } from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
+import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
 import { ForecastChart } from '../components/ForecastChart'
 import TimelineView from '../components/TimelineView'
 import UsersPage from './UsersPage'
+import SettingsPage from './SettingsPage'
 import {
   DAYS, formatWeekLabel, computeCoverage,
   getPhoneGap, getEmailGap, PHONE_START, PHONE_END,
@@ -116,6 +118,20 @@ export default function SchedulePage({ theme, toggleTheme }) {
     agents, currentMonday, weekSchedule, forecast, slaData, saving, saveError, loadError,
     copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot,
   } = useSchedule()
+
+  const {
+    shiftTypes, addShiftType, updateShiftType, deleteShiftType, reorderShiftType,
+  } = useShiftTypes()
+
+  // Special sentinel from SettingsPage reset button
+  const handleShiftTypeAdd = (form) => {
+    if (form === '__reset__') {
+      localStorage.removeItem('wfm-shift-types')
+      window.location.reload()
+      return
+    }
+    addShiftType(form)
+  }
 
   const [activeView,       setActiveView]       = useState('timeline')
   const [sidebarOpen,      setSidebarOpen]       = useState(true)
@@ -338,8 +354,20 @@ export default function SchedulePage({ theme, toggleTheme }) {
           })}
         </nav>
 
-        {/* Bottom: theme toggle */}
-        <div className="px-2 py-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
+        {/* Bottom: settings + theme toggle */}
+        <div className="px-2 py-3 border-t space-y-0.5" style={{ borderColor: 'var(--border-primary)' }}>
+          <button
+            onClick={() => setActiveView('settings')}
+            title={!sidebarOpen ? 'Settings' : undefined}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
+              activeView === 'settings'
+                ? 'bg-[#2A3245] text-white'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E]'
+            } ${!sidebarOpen ? 'justify-center' : ''}`}
+          >
+            <Settings size={15} className="shrink-0" />
+            {sidebarOpen && <span>Settings</span>}
+          </button>
           <button
             onClick={toggleTheme}
             title={!sidebarOpen ? (theme === 'dark' ? 'Light mode' : 'Dark mode') : undefined}
@@ -435,6 +463,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 phoneForecast={forecast.phoneForecast}
                 emailForecast={forecast.emailForecast}
                 updateSlot={updateSlot}
+                shiftTypes={shiftTypes}
               />
             </>
           )}
@@ -478,6 +507,17 @@ export default function SchedulePage({ theme, toggleTheme }) {
 
           {/* ── USERS ── */}
           {activeView === 'users' && <UsersPage />}
+
+          {/* ── SETTINGS ── */}
+          {activeView === 'settings' && (
+            <SettingsPage
+              shiftTypes={shiftTypes}
+              onAdd={handleShiftTypeAdd}
+              onUpdate={updateShiftType}
+              onDelete={deleteShiftType}
+              onReorder={reorderShiftType}
+            />
+          )}
 
         </div>
       </main>

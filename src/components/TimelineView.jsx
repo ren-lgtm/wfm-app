@@ -225,7 +225,7 @@ function useLatestWeekSchedule(agents) {
 
 // ─── Shift Modal ─────────────────────────────────────────────────────────────
 
-function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, onClose }) {
+function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shiftTypes, onClose }) {
   const existingActivity = agentSlots[clickedHour]
   const isEditing = !!existingActivity && existingActivity !== 'off'
 
@@ -239,11 +239,11 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, onC
     return { blockStart: start, blockEnd: end }
   }, [isEditing, clickedHour, agentSlots])
 
-  const [channel, setChannel] = useState(() =>
-    isEditing && existingActivity !== 'lunch'
-      ? existingActivity
-      : (agent.default_channel || 'email')
-  )
+  const [channel, setChannel] = useState(() => {
+    if (isEditing && shiftTypes?.find(t => t.id === existingActivity)) return existingActivity
+    const defaultType = shiftTypes?.find(t => t.id === (agent.default_channel || 'email'))
+    return defaultType?.id ?? shiftTypes?.[0]?.id ?? 'email'
+  })
   const [startHour, setStartHour] = useState(blockStart)
   const [endHour,   setEndHour]   = useState(blockEnd)
 
@@ -304,26 +304,27 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, onC
 
         {/* Fields */}
         <div className="px-5 py-4 space-y-4">
-          {/* Channel toggle */}
+          {/* Shift type grid */}
           <div>
-            <label className="block text-xs text-gray-400 mb-2 font-medium">Channel</label>
-            <div className="flex gap-2">
-              {[
-                { id: 'email', label: '✉ Email',  active: 'bg-blue-900/60 border-blue-700/60 text-blue-300'    },
-                { id: 'phone', label: '📞 Phone',  active: 'bg-emerald-900/60 border-emerald-700/60 text-emerald-300' },
-              ].map(ch => (
-                <button
-                  key={ch.id}
-                  onClick={() => setChannel(ch.id)}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                    channel === ch.id
-                      ? ch.active
-                      : 'bg-[#0C0F14] border-[#2A3245] text-gray-500 hover:text-gray-300 hover:border-[#3D4A6B]'
-                  }`}
-                >
-                  {ch.label}
-                </button>
-              ))}
+            <label className="block text-xs text-gray-400 mb-2 font-medium">Type</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(shiftTypes || []).map(type => {
+                const selected = channel === type.id
+                return (
+                  <button
+                    key={type.id}
+                    onClick={() => setChannel(type.id)}
+                    style={{
+                      background: selected ? type.color + '33' : type.color + '12',
+                      color: type.color,
+                      borderColor: selected ? type.color + '88' : type.color + '30',
+                    }}
+                    className="px-2 py-2 rounded-lg text-xs font-medium transition-all border truncate"
+                  >
+                    {type.name}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -394,7 +395,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, onC
 
 // ─── Day View ─────────────────────────────────────────────────────────────────
 
-function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot }) {
+function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes }) {
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
@@ -618,16 +619,26 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               : ''
                         } ${canEdit && !act ? 'hover:bg-[#2A3245]/40' : ''}`}
                       >
-                        {act && act !== 'off' ? (
-                          <div className={`
-                            text-center rounded text-[9px] font-medium py-1
-                            ${cs.bg} ${cs.text}
-                            ${isPast && act !== 'lunch' ? 'opacity-60' : ''}
-                            ${canEdit ? 'hover:brightness-125 transition-all' : ''}
-                          `}>
-                            {cs.label}
-                          </div>
-                        ) : (
+                        {act && act !== 'off' ? (() => {
+                          const shiftType = shiftTypes?.find(t => t.id === act)
+                          const label = shiftType ? shiftType.name : cs.label
+                          return (
+                            <div
+                              className={`
+                                text-center rounded text-[9px] font-medium py-1 truncate
+                                ${shiftType ? '' : `${cs.bg} ${cs.text}`}
+                                ${isPast ? 'opacity-60' : ''}
+                                ${canEdit ? 'hover:brightness-125 transition-all' : ''}
+                              `}
+                              style={shiftType ? {
+                                background: shiftType.color + '26',
+                                color: shiftType.color,
+                              } : undefined}
+                            >
+                              {label}
+                            </div>
+                          )
+                        })() : (
                           <div className="h-5" />
                         )}
                       </td>
@@ -823,6 +834,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           clickedHour={shiftModal.clickedHour}
           agentSlots={shiftModal.agentSlots}
           updateSlot={updateSlot}
+          shiftTypes={shiftTypes}
           onClose={() => setShiftModal(null)}
         />
       )}
@@ -1277,6 +1289,7 @@ export default function TimelineView({
   phoneForecast: livePF,
   emailForecast: liveEF,
   updateSlot,
+  shiftTypes,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
 
@@ -1471,6 +1484,7 @@ export default function TimelineView({
           phoneForecast={phoneForecast}
           emailForecast={emailForecast}
           updateSlot={updateSlot}
+          shiftTypes={shiftTypes}
         />
       )}
 
