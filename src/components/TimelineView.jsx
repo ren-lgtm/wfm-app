@@ -1373,16 +1373,21 @@ export default function TimelineView({
     if (!onViewChange) return
     const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri']
 
-    let dows = []
-    let label = ''
+    let dows = [], label = '', startDate = null, endDate = null
 
     if (viewMode === 'day') {
       const dow = DAYS_SHORT[getDayOfWeekIdx(selectedDate)]
       dows = WEEKDAYS.includes(dow) ? [dow] : []
       label = formatDate(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' })
+      startDate = new Date(selectedDate)
+      endDate   = new Date(selectedDate)
+
     } else if (viewMode === 'week') {
       dows = [...WEEKDAYS]
       label = `${formatDate(weekMonday, { month: 'short', day: 'numeric' })} – ${formatDate(addDays(weekMonday, 4), { month: 'short', day: 'numeric' })}`
+      startDate = new Date(weekMonday)
+      endDate   = addDays(weekMonday, 6)
+
     } else if (viewMode === 'month') {
       const yr = monthDate.getFullYear()
       const mo = monthDate.getMonth()
@@ -1392,6 +1397,9 @@ export default function TimelineView({
         if (WEEKDAYS.includes(dow)) dows.push(dow)
       }
       label = `${MONTHS_SHORT[mo]} ${yr}`
+      startDate = new Date(yr, mo, 1)
+      endDate   = new Date(yr, mo + 1, 0)
+
     } else if (viewMode === 'custom') {
       if (customStart && customEnd) {
         const [sy, sm, sd] = customStart.split('-').map(Number)
@@ -1404,11 +1412,13 @@ export default function TimelineView({
             if (WEEKDAYS.includes(dow)) dows.push(dow)
           }
           label = `${customStart} – ${customEnd}`
+          startDate = start
+          endDate   = end
         }
       }
     }
 
-    onViewChange({ mode: viewMode, dows, label })
+    onViewChange({ mode: viewMode, dows, label, startDate, endDate })
   }, [viewMode, selectedDate, weekMonday, monthDate, customStart, customEnd, onViewChange])
 
   // Navigation

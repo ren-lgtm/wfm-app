@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Copy,
   Users, BarChart2, Calendar, LayoutGrid,
@@ -10,9 +10,8 @@ import { ForecastChart } from '../components/ForecastChart'
 import TimelineView from '../components/TimelineView'
 import UsersPage from './UsersPage'
 import SettingsPage from './SettingsPage'
-import {
-  DAYS, formatWeekLabel, estimatePeriodSLA,
-} from '../lib/forecast'
+import { DAYS, formatWeekLabel } from '../lib/forecast'
+import { usePeriodKPIs } from '../hooks/usePeriodKPIs'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
@@ -137,14 +136,16 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const [copyMsg, setCopyMsg] = useState('')
 
   // ── Timeline view info (reported back from TimelineView) ──
-  const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today' })
+  const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today', startDate: null, endDate: null })
   const handleViewChange = useCallback((info) => setViewInfo(info), [])
 
-  // ── KPI data — re-computed whenever the Timeline's date range changes ──
-  const periodSLA = useMemo(() => {
-    if (!agents.length || !forecast.phoneForecast || !viewInfo.dows.length) return null
-    return estimatePeriodSLA(weekSchedule, agents, forecast.phoneForecast, forecast.emailForecast, viewInfo.dows)
-  }, [agents, weekSchedule, forecast, viewInfo.dows])
+  // ── KPI data — real DB data for past/current, forecast for future ──
+  const { kpis } = usePeriodKPIs({
+    startDate:     viewInfo.startDate,
+    endDate:       viewInfo.endDate,
+    phoneForecast: forecast.phoneForecast,
+    emailForecast: forecast.emailForecast,
+  })
 
   const slaColor = (pct) =>
     pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
@@ -363,31 +364,31 @@ export default function SchedulePage({ theme, toggleTheme }) {
               </div>
 
               {/* KPI cards */}
-              {periodSLA ? (
+              {kpis && (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Est. phone SLA · {viewInfo.label}</div>
-                    <div className={`text-2xl font-mono font-medium ${slaColor(periodSLA.phoneSLA)}`}>{periodSLA.phoneSLA}%</div>
-                    <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
+                    <div className="text-xs text-gray-500 mb-1">Inbound calls · {viewInfo.label}</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">{kpis.calls.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-600 mt-1">{kpis.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                   </div>
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Est. email SLA · {viewInfo.label}</div>
-                    <div className={`text-2xl font-mono font-medium ${slaColor(periodSLA.emailSLA)}`}>{periodSLA.emailSLA}%</div>
-                    <div className="text-[10px] text-gray-600 mt-1">target: 95%</div>
+                    <div className="text-xs text-gray-500 mb-1">Answer rate · {viewInfo.label}</div>
+                    <div className={`text-2xl font-mono font-medium ${kpis.answerRate !== null ? slaColor(kpis.answerRate) : 'text-gray-600'}`}>
+                      {kpis.answerRate !== null ? `${kpis.answerRate}%` : '—'}
+                    </div>
+                    <div className="text-[10px] text-gray-600 mt-1">{kpis.answerRate !== null ? 'target: 95%' : 'no data yet'}</div>
                   </div>
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Calls covered / expected</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">{periodSLA.phoneTotalAnswered.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">of {periodSLA.phoneTotalExpected.toLocaleString()} expected</div>
+                    <div className="text-xs text-gray-500 mb-1">Tickets created · {viewInfo.label}</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">{kpis.ticketsCreated.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-600 mt-1">{kpis.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                   </div>
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Emails covered / expected</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">{periodSLA.emailTotalAnswered.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">of {periodSLA.emailTotalExpected.toLocaleString()} expected</div>
+                    <div className="text-xs text-gray-500 mb-1">Tickets closed · {viewInfo.label}</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">{kpis.ticketsClosed.toLocaleString()}</div>
+                    <div className="text-[10px] text-gray-600 mt-1">{kpis.hasFutureData ? 'past dates only' : 'actual'}</div>
                   </div>
                 </div>
-              ) : viewInfo.dows.length === 0 && (
-                <div className="text-xs text-gray-500 font-mono py-1">No scheduled days in selected range</div>
               )}
 
               <TimelineView
