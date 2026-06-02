@@ -520,8 +520,8 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="text-[10px] border-collapse" style={{ minWidth: 24 * HOUR_COL_W + 140 }}>
+      <div className="overflow-x-auto bg-[#141922]">
+        <table className="text-[10px] border-collapse bg-[#141922]" style={{ minWidth: 24 * HOUR_COL_W + 140 }}>
 
           {/* ── Column widths ── */}
           <colgroup>
