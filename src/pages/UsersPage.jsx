@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { UserPlus, X, ChevronDown, Check, Mail, Shield, Star, User } from 'lucide-react'
+import { UserPlus, X, ChevronDown, Check, Mail, Shield, Star, User, Plus } from 'lucide-react'
+
+const AGENT_COLORS = ['#7C3AED','#0891B2','#059669','#D97706','#DC2626','#DB2777','#65A30D','#EA580C','#0284C7']
 
 const ROLES = ['Member', 'Lead', 'Admin']
 
@@ -58,13 +60,58 @@ function RoleDropdown({ value, onChange }) {
   )
 }
 
-export default function UsersPage() {
+export default function UsersPage({ addAgent }) {
   const [users, setUsers] = useState(INITIAL_USERS)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('Member')
   const [inviteError, setInviteError] = useState('')
   const [inviteSent, setInviteSent] = useState('')
+
+  // Add-to-roster form
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addName,     setAddName]     = useState('')
+  const [addRole,     setAddRole]     = useState('Member')
+  const [addError,    setAddError]    = useState('')
+  const [addSaving,   setAddSaving]   = useState(false)
+  const [addSuccess,  setAddSuccess]  = useState('')
+
+  const handleAddPerson = async (e) => {
+    e.preventDefault()
+    setAddError('')
+    if (!addName.trim()) { setAddError('Name is required.'); return }
+    if (users.some(u => u.name.toLowerCase() === addName.trim().toLowerCase())) {
+      setAddError('Someone with this name already exists.'); return
+    }
+    const color = AGENT_COLORS[users.length % AGENT_COLORS.length]
+    setAddSaving(true)
+    try {
+      await addAgent?.({
+        name: addName.trim(),
+        role: addRole.toLowerCase(),
+        default_channel: 'email',
+        color,
+        active: true,
+      })
+      setUsers(us => [...us, {
+        id: Date.now(),
+        name: addName.trim(),
+        email: '',
+        role: addRole,
+        status: 'active',
+        color,
+      }])
+      setAddSuccess(`${addName.trim()} added to roster`)
+      setAddName('')
+      setAddRole('Member')
+      setShowAddForm(false)
+      setTimeout(() => setAddSuccess(''), 4000)
+    } catch (err) {
+      setAddError('Failed to save — check your connection.')
+    } finally {
+      setAddSaving(false)
+    }
+  }
 
   const handleInvite = (e) => {
     e.preventDefault()
@@ -106,13 +153,24 @@ export default function UsersPage() {
           <p className="text-xs text-gray-500 mt-0.5">{users.length} member{users.length !== 1 ? 's' : ''} · manage team access and roles</p>
         </div>
         <div className="flex items-center gap-3">
+          {addSuccess && (
+            <span className="text-xs text-emerald-400 font-mono flex items-center gap-1">
+              <Check size={12} /> {addSuccess}
+            </span>
+          )}
           {inviteSent && (
             <span className="text-xs text-emerald-400 font-mono flex items-center gap-1">
               <Check size={12} /> {inviteSent}
             </span>
           )}
           <button
-            onClick={() => setShowInvite(v => !v)}
+            onClick={() => { setShowAddForm(v => !v); setShowInvite(false); setAddError('') }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors font-medium border border-[#2A3245]"
+          >
+            <Plus size={13} /> Add person
+          </button>
+          <button
+            onClick={() => { setShowInvite(v => !v); setShowAddForm(false) }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors font-medium"
           >
             <UserPlus size={13} /> Invite user
@@ -179,6 +237,46 @@ export default function UsersPage() {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Add person form */}
+      {showAddForm && (
+        <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white">Add to roster</h3>
+            <button onClick={() => { setShowAddForm(false); setAddError('') }} className="p-1 rounded hover:bg-[#2A3245] text-gray-500 hover:text-white transition-colors">
+              <X size={14} />
+            </button>
+          </div>
+          <form onSubmit={handleAddPerson} className="flex items-end gap-3 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[11px] text-gray-500 mb-1.5 font-medium uppercase tracking-wider">Name</label>
+              <input
+                type="text"
+                value={addName}
+                onChange={e => { setAddName(e.target.value); setAddError('') }}
+                placeholder="Full name"
+                autoFocus
+                className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              {addError && <p className="text-[11px] text-red-400 mt-1.5">{addError}</p>}
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-1.5 font-medium uppercase tracking-wider">Role</label>
+              <RoleDropdown value={addRole} onChange={setAddRole} />
+            </div>
+            <div className="pb-0.5">
+              <button
+                type="submit"
+                disabled={addSaving || !addName.trim()}
+                className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-medium transition-colors"
+              >
+                {addSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+          <p className="text-[11px] text-gray-600 mt-3">This person will appear as an agent row in the Timeline view.</p>
         </div>
       )}
 

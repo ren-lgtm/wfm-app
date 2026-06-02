@@ -116,7 +116,7 @@ function MultiWeekView({ agents, currentMonday, goToWeek, onOpenTimeline, foreca
 export default function SchedulePage({ theme, toggleTheme }) {
   const {
     agents, currentMonday, weekSchedule, forecast, slaData, saving, saveError, loadError,
-    copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot,
+    copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot, addAgent,
   } = useSchedule()
 
   const {
@@ -506,7 +506,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
           )}
 
           {/* ── USERS ── */}
-          {activeView === 'users' && <UsersPage />}
+          {activeView === 'users' && <UsersPage addAgent={addAgent} />}
 
           {/* ── SETTINGS ── */}
           {activeView === 'settings' && (
