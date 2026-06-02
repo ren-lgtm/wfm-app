@@ -649,7 +649,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                           key={startH}
                           colSpan={span}
                           onClick={canEdit ? () => openShiftModal(agent, startH, slots) : undefined}
-                          className={`py-1 px-0.5 ${canEdit ? 'cursor-pointer' : ''} ${
+                          className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer' : ''} ${
                             isCurrent ? 'border-l-2 border-l-blue-500' : ''
                           }`}
                         >
