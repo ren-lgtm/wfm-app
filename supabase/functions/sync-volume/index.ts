@@ -129,8 +129,9 @@ async function syncGorgias(targetDate: Date) {
     return d.toISOString().split('T')[0]
   }
 
-  // ── Count tickets created per hour, grouped by ET date ──
+  // ── Count tickets created and closed per hour, grouped by ET date ──
   const byDateCreated: Record<string, Record<number, number>> = {}
+  const byDateClosed: Record<string, Record<number, number>> = {}
   let cursor: string | null = null
   let done = false
 
@@ -151,48 +152,15 @@ async function syncGorgias(targetDate: Date) {
       const etDate = etDateFromTimestamp(Math.floor(created.getTime() / 1000))
       const h = (created.getUTCHours() + ET_OFFSET + 24) % 24
 
+      // Count as created
       if (!byDateCreated[etDate]) byDateCreated[etDate] = {}
       byDateCreated[etDate][h] = (byDateCreated[etDate][h] || 0) + 1
-    }
 
-    if (!data.meta?.next_cursor || tickets.length < 100) break
-    cursor = data.meta.next_cursor
-    await new Promise(r => setTimeout(r, 400))
-  }
-
-  // ── Count tickets closed per hour, grouped by ET date ──
-  const byDateClosed: Record<string, Record<number, number>> = {}
-  cursor = null
-  done   = false
-  let closedDebugLogged = false
-
-  while (!done) {
-    let url = `https://${GORGIAS_SUBDOMAIN}.gorgias.com/api/tickets?limit=100&order_by=closed_datetime%3Adesc`
-    if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`
-
-    const res  = await fetch(url, { headers: { Authorization: `Basic ${auth}` } })
-    const data = await res.json()
-    const tickets = data.data || []
-
-    // Debug: log first ticket's fields to understand closed datetime
-    if (!closedDebugLogged && tickets.length > 0) {
-      const t = tickets[0]
-      console.log(`[Gorgias closed ticket debug] closed_datetime=${t.closed_datetime}, closed_at=${t.closed_at}, status=${t.status}, updated_datetime=${t.updated_datetime}, id=${t.id}`)
-      closedDebugLogged = true
-    }
-
-    for (const t of tickets) {
-      if (!t.closed_datetime) continue
-      const closed = new Date(t.closed_datetime)
-      if (closed < cutoff)  { done = true; break }
-      if (closed >= nextDay) continue
-      if (!TRACKED_CHANNELS.includes(t.channel)) continue
-
-      const etDate = etDateFromTimestamp(Math.floor(closed.getTime() / 1000))
-      const h = (closed.getUTCHours() + ET_OFFSET + 24) % 24
-
-      if (!byDateClosed[etDate]) byDateClosed[etDate] = {}
-      byDateClosed[etDate][h] = (byDateClosed[etDate][h] || 0) + 1
+      // Count as closed if status is 'closed'
+      if (t.status === 'closed') {
+        if (!byDateClosed[etDate]) byDateClosed[etDate] = {}
+        byDateClosed[etDate][h] = (byDateClosed[etDate][h] || 0) + 1
+      }
     }
 
     if (!data.meta?.next_cursor || tickets.length < 100) break
