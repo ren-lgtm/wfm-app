@@ -103,7 +103,7 @@ body {
 [data-theme="light"] [class*="bg-\[#0C0F14\]\/40"] { background: #EEF1F7 !important; }
 [data-theme="light"] [class*="bg-\[#0C0F14\]\/60"] { background: #DDE3EF !important; }
 [data-theme="light"] [class*="bg-\[#0C0F14\]\/80"] { background: #D5DCE8 !important; }
-[data-theme="light"] [class*="bg-\[#0F1520\]"]     { background: #DDE3EF !important; }
+[data-theme="light"] [class*="bg-\[#0F1520\]"]     { background: #F3F4F6 !important; }
 
 /* Borders */
 [data-theme="light"] [class*="border-\[#1A1F2E\]"] { border-color: #D0D6E4 !important; }

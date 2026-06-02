@@ -520,8 +520,8 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         </div>
       )}
 
-      <div className="overflow-x-auto bg-[#1A1F2E]">
-        <table className="text-[10px] border-collapse bg-[#1A1F2E]" style={{ minWidth: 24 * HOUR_COL_W + 140 }}>
+      <div className="overflow-x-auto">
+        <table className="text-[10px] border-collapse w-full" style={{ minWidth: 24 * HOUR_COL_W + 140 }}>
 
           {/* ── Column widths ── */}
           <colgroup>
@@ -532,7 +532,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           <thead>
             {/* Phone-hours bracket row — label spans phone columns via colspan */}
             <tr>
-              <th className="sticky left-0 z-20 bg-[#1A1F2E] border-r border-[#2A3245]" />
+              <th className="sticky left-0 z-20 bg-[#141922] border-r border-[#2A3245]" />
               {hours.map(h => {
                 const isPhone = h >= PHONE_START && h < PHONE_END
                 if (h === PHONE_START) {
@@ -554,7 +554,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
             </tr>
 
             <tr>
-              <th className="sticky left-0 z-20 bg-[#1A1F2E] text-left px-4 py-3 text-xs font-semibold text-gray-300 border-b border-r border-[#2A3245]">
+              <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-3 text-xs font-semibold text-gray-300 border-b border-r border-[#2A3245]">
                 Agent
               </th>
               {hours.map(h => {
@@ -590,7 +590,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   key={agent.id}
                   className={`border-b border-[#1A1F2E] ${idx % 2 === 1 ? 'bg-[#0C0F14]/20' : ''}`}
                 >
-                  <td className="sticky left-0 z-10 bg-[#1A1F2E] border-r border-[#2A3245] px-3 py-1">
+                  <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-3 py-1">
                     <div className="flex items-center gap-2">
                       <div
                         className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
@@ -661,7 +661,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               ${canEdit ? 'hover:brightness-125 transition-all' : ''}
                             `}
                             style={shiftType ? {
-                              background: shiftType.color + '26',
+                              background: shiftType.color + '33',
                               color: shiftType.color,
                             } : undefined}
                           >
