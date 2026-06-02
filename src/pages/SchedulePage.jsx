@@ -114,7 +114,7 @@ function MultiWeekView({ agents, currentMonday, goToWeek, onOpenTimeline, foreca
 export default function SchedulePage({ theme, toggleTheme }) {
   const {
     agents, currentMonday, weekSchedule, forecast, slaData, saving, saveError, loadError,
-    copyLastWeek, goNextWeek, goPrevWeek, goToWeek,
+    copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot,
   } = useSchedule()
 
   const [activeView,       setActiveView]       = useState('timeline')
@@ -434,6 +434,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 currentMonday={currentMonday}
                 phoneForecast={forecast.phoneForecast}
                 emailForecast={forecast.emailForecast}
+                updateSlot={updateSlot}
               />
             </>
           )}

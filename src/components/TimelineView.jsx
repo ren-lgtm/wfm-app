@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import {
   hLabel, getMondayOfWeek, toISODate,
   BASELINE_EMAIL, BASELINE_PHONE,
@@ -223,9 +223,178 @@ function useLatestWeekSchedule(agents) {
   return result
 }
 
+// ─── Shift Modal ─────────────────────────────────────────────────────────────
+
+function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, onClose }) {
+  const existingActivity = agentSlots[clickedHour]
+  const isEditing = !!existingActivity && existingActivity !== 'off'
+
+  // Detect the contiguous block of the same activity around clickedHour
+  const { blockStart, blockEnd } = useMemo(() => {
+    if (!isEditing) return { blockStart: clickedHour, blockEnd: clickedHour }
+    const act = agentSlots[clickedHour]
+    let start = clickedHour, end = clickedHour
+    while (start > 0 && agentSlots[start - 1] === act) start--
+    while (end < 23 && agentSlots[end + 1] === act) end++
+    return { blockStart: start, blockEnd: end }
+  }, [isEditing, clickedHour, agentSlots])
+
+  const [channel, setChannel] = useState(() =>
+    isEditing && existingActivity !== 'lunch'
+      ? existingActivity
+      : (agent.default_channel || 'email')
+  )
+  const [startHour, setStartHour] = useState(blockStart)
+  const [endHour,   setEndHour]   = useState(blockEnd)
+
+  const handleSave = () => {
+    // Clear any old block hours that fall outside the new range
+    if (isEditing) {
+      for (let h = blockStart; h <= blockEnd; h++) {
+        if (h < startHour || h > endHour) updateSlot(agent.id, dow, h, null)
+      }
+    }
+    // Write new range
+    for (let h = startHour; h <= endHour; h++) {
+      updateSlot(agent.id, dow, h, channel)
+    }
+    onClose()
+  }
+
+  const handleDelete = () => {
+    for (let h = blockStart; h <= blockEnd; h++) {
+      updateSlot(agent.id, dow, h, null)
+    }
+    onClose()
+  }
+
+  const dateLabel = new Date(date).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  })
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[#141922] border border-[#2A3245] rounded-xl w-full max-w-sm shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A3245]">
+          <div>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                style={{ background: agent.color }}
+              >
+                {agent.name[0]}
+              </div>
+              <span className="font-semibold text-white text-sm">
+                {isEditing ? 'Edit Shift' : 'Add Shift'}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-0.5">{agent.name} · {dateLabel}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Fields */}
+        <div className="px-5 py-4 space-y-4">
+          {/* Channel toggle */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-2 font-medium">Channel</label>
+            <div className="flex gap-2">
+              {[
+                { id: 'email', label: '✉ Email',  active: 'bg-blue-900/60 border-blue-700/60 text-blue-300'    },
+                { id: 'phone', label: '📞 Phone',  active: 'bg-emerald-900/60 border-emerald-700/60 text-emerald-300' },
+              ].map(ch => (
+                <button
+                  key={ch.id}
+                  onClick={() => setChannel(ch.id)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                    channel === ch.id
+                      ? ch.active
+                      : 'bg-[#0C0F14] border-[#2A3245] text-gray-500 hover:text-gray-300 hover:border-[#3D4A6B]'
+                  }`}
+                >
+                  {ch.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Start / End time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Start time</label>
+              <select
+                value={startHour}
+                onChange={e => {
+                  const h = Number(e.target.value)
+                  setStartHour(h)
+                  if (endHour < h) setEndHour(h)
+                }}
+                className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>{hLabel(h)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">End time</label>
+              <select
+                value={endHour}
+                onChange={e => setEndHour(Number(e.target.value))}
+                className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                {Array.from({ length: 24 }, (_, h) => h)
+                  .filter(h => h >= startHour)
+                  .map(h => (
+                    <option key={h} value={h}>{hLabel(h)}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-[#2A3245] flex items-center justify-between">
+          {isEditing ? (
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-lg transition-colors"
+            >
+              Delete shift
+            </button>
+          ) : <div />}
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Day View ─────────────────────────────────────────────────────────────────
 
-function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast }) {
+function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot }) {
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
@@ -251,6 +420,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast 
   const effectiveMonday   = isTemplate
     ? new Date(templateWeekStart + 'T00:00:00') // treat template monday as anchor
     : monday
+
+  // Shift modal state — only enabled when showing live (non-template) data
+  const canEdit = !!updateSlot && !isTemplate
+  const [shiftModal, setShiftModal] = useState(null) // { agent, clickedHour, agentSlots }
+
+  const openShiftModal = (agent, h, slots) => {
+    if (!canEdit) return
+    setShiftModal({ agent, clickedHour: h, agentSlots: slots })
+  }
 
   // For the template: we want the same day-of-week (0-6), not offset from today's monday.
   // getSlotsForDate computes offset from monday; for template just read dayIdx directly.
@@ -431,19 +609,21 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast 
                     return (
                       <td
                         key={h}
-                        className={`py-1 px-0.5 ${
+                        onClick={() => openShiftModal(agent, h, slots)}
+                        className={`py-1 px-0.5 ${canEdit ? 'cursor-pointer' : ''} ${
                           isCurrent
                             ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
                             : isPhone
                               ? 'bg-emerald-950/20'
                               : ''
-                        }`}
+                        } ${canEdit && !act ? 'hover:bg-[#2A3245]/40' : ''}`}
                       >
                         {act && act !== 'off' ? (
                           <div className={`
                             text-center rounded text-[9px] font-medium py-1
                             ${cs.bg} ${cs.text}
                             ${isPast && act !== 'lunch' ? 'opacity-60' : ''}
+                            ${canEdit ? 'hover:brightness-125 transition-all' : ''}
                           `}>
                             {cs.label}
                           </div>
@@ -633,6 +813,19 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast 
           </span>
         )}
       </div>
+
+      {/* Shift modal */}
+      {shiftModal && (
+        <ShiftModal
+          agent={shiftModal.agent}
+          date={date}
+          dow={dow}
+          clickedHour={shiftModal.clickedHour}
+          agentSlots={shiftModal.agentSlots}
+          updateSlot={updateSlot}
+          onClose={() => setShiftModal(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1083,6 +1276,7 @@ export default function TimelineView({
   currentMonday: liveMonday,
   phoneForecast: livePF,
   emailForecast: liveEF,
+  updateSlot,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
 
@@ -1276,6 +1470,7 @@ export default function TimelineView({
           monday={monday}
           phoneForecast={phoneForecast}
           emailForecast={emailForecast}
+          updateSlot={updateSlot}
         />
       )}
 
