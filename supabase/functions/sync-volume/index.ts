@@ -84,8 +84,8 @@ async function syncAircall(targetDate: Date) {
     await new Promise(r => setTimeout(r, 500))
   }
 
-  const dateStr = etDateStr(from + 3600)
-  const dayName = etDayName(from + 3600)
+  const dateStr = etDateStr(from - ET_OFFSET * 3600)
+  const dayName = etDayName(from - ET_OFFSET * 3600)
 
   const volumeRows = Object.entries(hourCounts).map(([hour, count]) => ({
     date: dateStr,
