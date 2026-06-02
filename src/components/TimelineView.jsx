@@ -588,7 +588,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
               return (
                 <tr
                   key={agent.id}
-                  className={`border-b border-[#1A1F2E] ${idx % 2 === 1 ? 'bg-[#0C0F14]/20' : ''}`}
+                  className={`border-b border-[#1A1F2E] ${idx % 2 === 1 ? 'bg-[#0C0F14]/20' : 'bg-[#1A1F2E]'}`}
                 >
                   <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-3 py-1">
                     <div className="flex items-center gap-2">
