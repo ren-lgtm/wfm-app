@@ -258,7 +258,11 @@ export function useSchedule() {
 
   // Add a new agent
   const addAgent = useCallback(async (agentData) => {
-    const { data } = await supabase.from('agents').insert(agentData).select().single()
+    const { data, error } = await supabase.from('agents').insert(agentData).select().single()
+    if (error) {
+      console.error('[addAgent] Supabase error:', error.message, error.details, agentData)
+      throw new Error(error.message)
+    }
     if (data) setAgents(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     return data
   }, [])

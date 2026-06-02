@@ -88,7 +88,7 @@ export default function UsersPage({ addAgent }) {
     try {
       await addAgent?.({
         name: addName.trim(),
-        role: addRole.toLowerCase(),
+        role: 'both',           // agents.role must be phone/email/both per DB constraint
         default_channel: 'email',
         color,
         active: true,
