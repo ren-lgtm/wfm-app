@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import {
   hLabel, getMondayOfWeek, toISODate,
@@ -432,10 +432,109 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
 
   // Shift modal state — only enabled when showing live (non-template) data
   const canEdit = !!updateSlot && !isTemplate
-  const [shiftModal, setShiftModal] = useState(null) // { agent, clickedHour, agentSlots }
+  const [shiftModal, setShiftModal] = useState(null)
+
+  // ── Drag state ─────────────────────────────────────────────────────────────
+  // drag = { type:'move'|'resize', agentId, dow, origStart, origEnd, activity,
+  //          offsetH, edge, previewStart, previewEnd, conflict }
+  const [drag, setDrag]   = useState(null)
+  const containerRef      = useRef(null)
+  const justDragged       = useRef(false)
+
+  function clientXToHour(clientX) {
+    if (!containerRef.current) return null
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = clientX - rect.left + containerRef.current.scrollLeft - 140
+    return Math.max(0, Math.min(23, Math.floor(x / HOUR_COL_W)))
+  }
+
+  // Returns a modified slots map reflecting the current drag preview
+  function computeDisplaySlots(base, d) {
+    const s = { ...base }
+    for (let h = d.origStart; h <= d.origEnd; h++) delete s[h]
+    for (let h = d.previewStart; h <= d.previewEnd; h++) s[h] = d.activity
+    return s
+  }
+
+  const handlePointerMove = useCallback((e) => {
+    if (!drag || !canEdit) return
+    e.preventDefault()
+    const h = clientXToHour(e.clientX)
+    if (h === null) return
+    const base = agentSlots[drag.agentId] || {}
+
+    if (drag.type === 'move') {
+      const len      = drag.origEnd - drag.origStart
+      const newStart = Math.max(0, Math.min(23 - len, h - drag.offsetH))
+      const newEnd   = newStart + len
+      let conflict   = false
+      for (let i = newStart; i <= newEnd; i++) {
+        const ex = base[i]
+        if (ex && ex !== drag.activity && (i < drag.origStart || i > drag.origEnd)) {
+          conflict = true; break
+        }
+      }
+      setDrag(d => ({
+        ...d,
+        previewStart: conflict ? d.origStart : newStart,
+        previewEnd:   conflict ? d.origEnd   : newEnd,
+        conflict,
+      }))
+    } else {
+      if (drag.edge === 'right') {
+        let maxEnd = 23
+        for (let i = drag.origEnd + 1; i <= 23; i++) {
+          if (base[i] && base[i] !== drag.activity) { maxEnd = i - 1; break }
+        }
+        const newEnd = Math.max(drag.origStart, Math.min(maxEnd, h))
+        setDrag(d => ({ ...d, previewEnd: newEnd }))
+      } else {
+        let minStart = 0
+        for (let i = drag.origStart - 1; i >= 0; i--) {
+          if (base[i] && base[i] !== drag.activity) { minStart = i + 1; break }
+        }
+        const newStart = Math.min(drag.origEnd, Math.max(minStart, h))
+        setDrag(d => ({ ...d, previewStart: newStart }))
+      }
+    }
+  }, [drag, canEdit, agentSlots])
+
+  const handlePointerUp = useCallback((e) => {
+    if (!drag || !canEdit) return
+    const { type, agentId, dow: d, origStart, origEnd, activity, previewStart, previewEnd, conflict, edge } = drag
+    setDrag(null)
+    if (conflict) return
+    if (previewStart === origStart && previewEnd === origEnd) return
+
+    justDragged.current = true
+    setTimeout(() => { justDragged.current = false }, 150)
+
+    if (type === 'move') {
+      for (let h = origStart; h <= origEnd; h++) {
+        if (h < previewStart || h > previewEnd) updateSlot(agentId, d, h, null)
+      }
+      for (let h = previewStart; h <= previewEnd; h++) {
+        if (h < origStart || h > origEnd) updateSlot(agentId, d, h, activity)
+      }
+    } else {
+      if (edge === 'right') {
+        if (previewEnd > origEnd) {
+          for (let h = origEnd + 1;  h <= previewEnd; h++) updateSlot(agentId, d, h, activity)
+        } else {
+          for (let h = previewEnd + 1; h <= origEnd; h++) updateSlot(agentId, d, h, null)
+        }
+      } else {
+        if (previewStart < origStart) {
+          for (let h = previewStart; h < origStart; h++) updateSlot(agentId, d, h, activity)
+        } else {
+          for (let h = origStart; h < previewStart; h++) updateSlot(agentId, d, h, null)
+        }
+      }
+    }
+  }, [drag, canEdit, updateSlot])
 
   const openShiftModal = (agent, h, slots) => {
-    if (!canEdit) return
+    if (!canEdit || justDragged.current) return
     setShiftModal({ agent, clickedHour: h, agentSlots: slots })
   }
 
@@ -527,7 +626,14 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         </div>
       )}
 
-      <div className="overflow-x-auto relative">
+      <div
+        className="overflow-x-auto relative"
+        ref={containerRef}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={() => setDrag(null)}
+        style={drag ? { userSelect: 'none' } : undefined}
+      >
         {isToday && (
           <div
             className="pointer-events-none absolute top-0 bottom-0 z-[8]"
@@ -632,7 +738,12 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           <tbody>
             {/* ── Agent rows ── */}
             {agents.map((agent, idx) => {
-              const slots = agentSlots[agent.id] || {}
+              const baseSlots = agentSlots[agent.id] || {}
+              const isBeingDragged = drag && drag.agentId === agent.id
+              const slots = (isBeingDragged && !drag.conflict)
+                ? computeDisplaySlots(baseSlots, drag)
+                : baseSlots
+
               return (
                 <tr
                   key={agent.id}
@@ -650,7 +761,6 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                     </div>
                   </td>
                   {(() => {
-                    // Compute consecutive runs of the same activity
                     const runs = []
                     let i = 0
                     while (i < hours.length) {
@@ -668,21 +778,18 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                     }
 
                     return runs.map(({ startH, endH, activity, span }) => {
-                      const isCurrent = isToday && startH <= currentHour && currentHour <= endH
-                      const isPast    = isToday && endH < currentHour
-                      const isPhone   = startH >= PHONE_START && endH < PHONE_END
+                      const isCurrent    = isToday && startH <= currentHour && currentHour <= endH
+                      const isPast       = isToday && endH < currentHour
+                      const isPhone      = startH >= PHONE_START && endH < PHONE_END
+                      const isPreview    = isBeingDragged && !drag.conflict && drag.type === 'move' && startH === drag.previewStart
 
                       if (!activity || activity === 'off') {
                         return (
                           <td
                             key={startH}
-                            onClick={canEdit ? () => openShiftModal(agent, startH, slots) : undefined}
+                            onClick={canEdit ? () => openShiftModal(agent, startH, baseSlots) : undefined}
                             className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/40' : ''} ${
-                              isCurrent
-                                ? 'bg-blue-950/20'
-                                : isPhone
-                                  ? 'bg-emerald-950/20'
-                                  : ''
+                              isCurrent ? 'bg-blue-950/20' : isPhone ? 'bg-emerald-950/20' : ''
                             }`}
                           />
                         )
@@ -691,29 +798,69 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                       const shiftType = shiftTypes?.find(t => t.id === activity)
                       const cs        = cellStyle(activity)
                       const label     = shiftType ? shiftType.name : cs.label
+                      const showHandles = canEdit && !(activity === 'lunch' && span < 2)
 
                       return (
                         <td
                           key={startH}
                           colSpan={span}
-                          onClick={canEdit ? () => openShiftModal(agent, startH, slots) : undefined}
-                          className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer' : ''} ${
-                            ''
-                          }`}
+                          className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                          onClick={canEdit ? (e) => {
+                            if (!justDragged.current) openShiftModal(agent, startH, baseSlots)
+                          } : undefined}
                         >
                           <div
                             className={`
-                              text-center rounded text-[9px] font-medium py-1 truncate
+                              relative text-center rounded text-[9px] font-medium py-1 select-none
                               ${shiftType ? '' : `${cs.bg} ${cs.text}`}
                               ${isPast ? 'opacity-60' : ''}
-                              ${canEdit ? 'hover:brightness-125 transition-all' : ''}
+                              ${isPreview ? 'opacity-60 ring-1 ring-white/20' : ''}
+                              ${canEdit && !isPreview ? 'hover:brightness-125 transition-all' : ''}
                             `}
-                            style={shiftType ? {
-                              background: shiftType.color + '33',
-                              color: shiftType.color,
+                            style={shiftType ? { background: shiftType.color + '33', color: shiftType.color } : undefined}
+                            onPointerDown={canEdit ? (e) => {
+                              if (e.target !== e.currentTarget && e.target.dataset.handle) return
+                              e.stopPropagation()
+                              const h = clientXToHour(e.clientX)
+                              setDrag({
+                                type: 'move', agentId: agent.id, dow,
+                                origStart: startH, origEnd: endH, activity,
+                                offsetH: h !== null ? h - startH : 0,
+                                previewStart: startH, previewEnd: endH, conflict: false,
+                              })
                             } : undefined}
                           >
+                            {/* Left resize handle */}
+                            {showHandles && (
+                              <div
+                                data-handle="left"
+                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l hover:bg-white/20 z-10"
+                                onPointerDown={(e) => {
+                                  e.stopPropagation()
+                                  setDrag({
+                                    type: 'resize', edge: 'left', agentId: agent.id, dow,
+                                    origStart: startH, origEnd: endH, activity,
+                                    previewStart: startH, previewEnd: endH, conflict: false,
+                                  })
+                                }}
+                              />
+                            )}
                             {label}
+                            {/* Right resize handle */}
+                            {showHandles && (
+                              <div
+                                data-handle="right"
+                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r hover:bg-white/20 z-10"
+                                onPointerDown={(e) => {
+                                  e.stopPropagation()
+                                  setDrag({
+                                    type: 'resize', edge: 'right', agentId: agent.id, dow,
+                                    origStart: startH, origEnd: endH, activity,
+                                    previewStart: startH, previewEnd: endH, conflict: false,
+                                  })
+                                }}
+                              />
+                            )}
                           </div>
                         </td>
                       )
