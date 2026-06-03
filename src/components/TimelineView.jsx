@@ -553,9 +553,40 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
               })}
             </tr>
 
+            {/* ET hour labels row */}
             <tr>
-              <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-3 text-xs font-semibold text-gray-300 border-b border-r border-[#2A3245]">
-                Agent
+              <th className="sticky left-0 z-20 bg-[#141922] text-right pr-2 py-0.5 text-[9px] font-semibold text-gray-600 border-r border-[#2A3245]">
+                ET
+              </th>
+              {hours.map(h => {
+                const isCurrent = isToday && h === currentHour
+                const isPast    = isToday && h < currentHour
+                const isPhone   = h >= PHONE_START && h < PHONE_END
+                const etH       = (h + 3) % 24
+                return (
+                  <th
+                    key={h}
+                    className={`py-0.5 text-center font-mono text-[9px] border-[#2A3245] ${
+                      isCurrent
+                        ? 'text-blue-300/50 bg-blue-950/30 border-l-2 border-l-blue-500'
+                        : isPhone
+                          ? isPast ? 'text-emerald-900/60 bg-emerald-950/40' : 'text-emerald-700/60 bg-emerald-950/40'
+                          : isPast
+                            ? 'text-gray-800'
+                            : 'text-gray-600'
+                    }`}
+                  >
+                    {hLabel(etH)}
+                  </th>
+                )
+              })}
+            </tr>
+
+            {/* PT hour labels row */}
+            <tr>
+              <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-2 text-xs font-semibold text-gray-300 border-b border-r border-[#2A3245]">
+                <div>Agent</div>
+                <div className="text-right text-[9px] font-semibold text-gray-600 -mt-0.5">PT</div>
               </th>
               {hours.map(h => {
                 const isCurrent  = isToday && h === currentHour
@@ -564,7 +595,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                 return (
                   <th
                     key={h}
-                    className={`py-3 text-center font-mono border-b border-[#2A3245] ${
+                    className={`py-2 text-center font-mono border-b border-[#2A3245] ${
                       isCurrent
                         ? 'text-blue-400 bg-blue-950/30 border-l-2 border-l-blue-500'
                         : isPhone
