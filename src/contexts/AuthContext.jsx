@@ -15,11 +15,13 @@ export function AuthProvider({ children }) {
       return
     }
     setUser(session.user)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .select('role, agent_id')
       .eq('email', session.user.email)
       .single()
+    console.log('[AuthContext] email:', session.user.email)
+    console.log('[AuthContext] app_users lookup:', data, 'error:', error)
     setRole(data?.role ?? null)
     setAgentId(data?.agent_id ?? null)
   }
