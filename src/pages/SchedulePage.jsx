@@ -140,7 +140,10 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today', startDate: null, endDate: null })
   const handleViewChange = useCallback((info) => setViewInfo(info), [])
 
-  const handleRate = useAvgHandleRate()
+  const { rangeRate, benchmarkRate } = useAvgHandleRate({
+    startDate: viewInfo.startDate,
+    endDate:   viewInfo.endDate,
+  })
 
   // ── KPI data — real DB data for past/current, forecast for future ──
   const { kpis } = usePeriodKPIs({
@@ -389,9 +392,14 @@ export default function SchedulePage({ theme, toggleTheme }) {
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                     <div className="text-xs text-gray-500 mb-1">Avg handle rate</div>
                     <div className="text-2xl font-mono font-medium text-gray-300">
-                      {handleRate !== null ? handleRate.toFixed(1) : '—'}
+                      {rangeRate !== null ? rangeRate.toFixed(1) : '—'}
                     </div>
-                    <div className="text-[10px] text-gray-600 mt-1">tickets/agent/hr · 30-day avg</div>
+                    <div className="text-[10px] text-gray-600 mt-1">tickets/agent/hr</div>
+                    {benchmarkRate !== null && (
+                      <div className="text-[10px] text-gray-600 mt-1">
+                        30-day avg · {benchmarkRate.toFixed(1)}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -405,7 +413,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 updateSlot={updateSlot}
                 shiftTypes={shiftTypes}
                 onViewChange={handleViewChange}
-                handleRate={handleRate}
+                handleRate={benchmarkRate}
               />
             </>
           )}
