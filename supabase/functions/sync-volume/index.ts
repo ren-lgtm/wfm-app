@@ -206,6 +206,79 @@ async function syncGorgias(targetDate: Date) {
   }
 }
 
+async function syncGorgiasAgentMetrics(targetDate: Date) {
+  const dateStr = targetDate.toISOString().split('T')[0]
+  const auth    = btoa(`${GORGIAS_EMAIL}:${GORGIAS_API_KEY}`)
+  const base    = `https://${GORGIAS_SUBDOMAIN}.gorgias.com`
+  const jsonHdr = { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' }
+
+  // ── 1. tickets-closed-per-agent-per-day ──────────────────────────────────────
+  const closedRes = await fetch(`${base}/api/stats/tickets-closed-per-agent-per-day`, {
+    method: 'POST',
+    headers: jsonHdr,
+    body: JSON.stringify({
+      filters: { period: { start_datetime: `${dateStr}T00:00:00`, end_datetime: `${dateStr}T23:59:59` } },
+    }),
+  })
+  const closedData = await closedRes.json()
+
+  // Response shape: { data: { data: { axes: { x: [ts] }, lines: [{ name, data: [count] }] } } }
+  const lines: { name: string; data: number[] }[] = closedData?.data?.data?.lines ?? []
+  const closedByName: Record<string, number> = {}
+  for (const line of lines) {
+    if (line.data[0] > 0) closedByName[line.name] = line.data[0]
+  }
+
+  // ── 2. online-time per agent ──────────────────────────────────────────────────
+  const onlineRes = await fetch(`${base}/api/reporting/stats`, {
+    method: 'POST',
+    headers: jsonHdr,
+    body: JSON.stringify({
+      query: {
+        scope: 'online-time',
+        timezone: 'America/Los_Angeles',
+        measures: ['onlineTime'],
+        dimensions: ['agentId'],
+        filters: [
+          { member: 'periodStart', operator: 'afterDate',  values: [dateStr] },
+          { member: 'periodEnd',   operator: 'beforeDate', values: [new Date(targetDate.getTime() + 86400000).toISOString().split('T')[0]] },
+        ],
+      },
+    }),
+  })
+  const onlineData = await onlineRes.json()
+  const onlineRows: { agentId: number; onlineTime: number }[] = onlineData?.data ?? []
+
+  // ── 3. agents list to map agentId → name ─────────────────────────────────────
+  const usersRes  = await fetch(`${base}/api/users?limit=100`, { headers: { Authorization: `Basic ${auth}` } })
+  const usersData = await usersRes.json()
+  const idToName: Record<number, string> = {}
+  for (const u of (usersData?.data ?? [])) {
+    idToName[u.id] = u.name
+  }
+
+  const onlineByName: Record<string, number> = {}
+  for (const row of onlineRows) {
+    const name = idToName[row.agentId]
+    if (name) onlineByName[name] = row.onlineTime
+  }
+
+  // ── 4. Join on agent name, filter to tickets_closed > 0 ──────────────────────
+  const rows = Object.entries(closedByName).map(([agent_name, tickets_closed]) => ({
+    date: dateStr,
+    agent_name,
+    tickets_closed,
+    online_time_seconds: onlineByName[agent_name] ?? null,
+  }))
+
+  if (rows.length) {
+    await supabase.from('agent_metrics').upsert(rows, { onConflict: 'date,agent_name' })
+    console.log(`Gorgias agent metrics: ${rows.length} agents for ${dateStr}`)
+  } else {
+    console.log(`Gorgias agent metrics: no data for ${dateStr}`)
+  }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -235,10 +308,19 @@ Deno.serve(async (req: Request) => {
   }
 
   const dateStr = targetDate.toISOString().split('T')[0]
-  console.log(`Syncing volume for ${dateStr}`)
+  const source  = url.searchParams.get('source')
+  console.log(`Syncing volume for ${dateStr}${source ? ` (source=${source})` : ''}`)
 
   try {
-    await Promise.all([syncAircall(targetDate), syncGorgias(targetDate)])
+    if (source === 'aircall') {
+      await syncAircall(targetDate)
+    } else if (source === 'gorgias') {
+      await syncGorgias(targetDate)
+    } else if (source === 'gorgias_metrics') {
+      await syncGorgiasAgentMetrics(targetDate)
+    } else {
+      await Promise.all([syncAircall(targetDate), syncGorgias(targetDate), syncGorgiasAgentMetrics(targetDate)])
+    }
     return new Response(
       JSON.stringify({ ok: true, date: dateStr }),
       { headers: { 'Content-Type': 'application/json' } }

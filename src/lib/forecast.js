@@ -135,8 +135,8 @@ export function agentsNeededPhone(expectedCalls) {
   return Math.ceil((expectedCalls * PHONE_SLA_TARGET) / AVG_CALLS_PER_AGENT_HOUR)
 }
 
-export function agentsNeededEmail(expectedTickets) {
-  return Math.ceil((expectedTickets * EMAIL_SLA_TARGET) / AVG_EMAILS_PER_AGENT_HOUR)
+export function agentsNeededEmail(expectedTickets, handleRate = AVG_EMAILS_PER_AGENT_HOUR) {
+  return Math.ceil(expectedTickets / handleRate)
 }
 
 // Weekly SLA estimate based on schedule

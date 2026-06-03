@@ -489,7 +489,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   }
 
   // Use the same shared functions as CoverageBar so both views are identical
-  function emailNeeded(h) { return agentsNeededEmail(emailVolume(h)) }
+  function emailNeeded(h) { return agentsNeededEmail(emailVolume(h), handleRate ?? undefined) }
   function phoneNeeded(h) { return agentsNeededPhone(phoneVolume(h)) }
 
   // Label for source (actual vs forecast)
@@ -1318,6 +1318,7 @@ export default function TimelineView({
   updateSlot,
   shiftTypes,
   onViewChange,
+  handleRate,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
 

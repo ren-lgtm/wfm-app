@@ -12,6 +12,7 @@ import UsersPage from './UsersPage'
 import SettingsPage from './SettingsPage'
 import { DAYS, formatWeekLabel } from '../lib/forecast'
 import { usePeriodKPIs } from '../hooks/usePeriodKPIs'
+import { useAvgHandleRate } from '../hooks/useAvgHandleRate'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
@@ -138,6 +139,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
   // ── Timeline view info (reported back from TimelineView) ──
   const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today', startDate: null, endDate: null })
   const handleViewChange = useCallback((info) => setViewInfo(info), [])
+
+  const handleRate = useAvgHandleRate()
 
   // ── KPI data — real DB data for past/current, forecast for future ──
   const { kpis } = usePeriodKPIs({
@@ -384,9 +387,11 @@ export default function SchedulePage({ theme, toggleTheme }) {
                     <div className="text-[10px] text-gray-600 mt-1">{kpis.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                   </div>
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Tickets closed · {viewInfo.label}</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">{kpis.ticketsClosed.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">{kpis.hasFutureData ? 'past dates only' : 'actual'}</div>
+                    <div className="text-xs text-gray-500 mb-1">Avg handle rate</div>
+                    <div className="text-2xl font-mono font-medium text-gray-300">
+                      {handleRate !== null ? handleRate.toFixed(1) : '—'}
+                    </div>
+                    <div className="text-[10px] text-gray-600 mt-1">tickets/agent/hr · 30-day avg</div>
                   </div>
                 </div>
               )}
@@ -400,6 +405,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 updateSlot={updateSlot}
                 shiftTypes={shiftTypes}
                 onViewChange={handleViewChange}
+                handleRate={handleRate}
               />
             </>
           )}

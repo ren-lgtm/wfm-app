@@ -37,7 +37,7 @@ function computeEmailQueue(hours, emailCov, emailForecast, day, startingQueue) {
   return queueByHour
 }
 
-export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, day }) {
+export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, day, handleRate }) {
   const [liveQueue, setLiveQueue] = useState(null)
   const [fetchedAt, setFetchedAt] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -168,7 +168,7 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
             const vol = emailForecast?.[day]?.[h] || 0
             const gap = getEmailGap(n, vol)
             const rate = emailAnswerRate(n, vol)
-            const needed = agentsNeededEmail(vol)
+            const needed = agentsNeededEmail(vol, handleRate ?? undefined)
             const c = GAP_COLORS[gap]
             return (
               <div
