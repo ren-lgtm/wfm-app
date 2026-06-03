@@ -21,9 +21,20 @@ export function AuthProvider({ children }) {
       .eq('email', session.user.email)
       .maybeSingle()
     console.log('[AuthContext] email:', session.user.email)
-    console.log('[AuthContext] app_users lookup:', data, 'error:', error)
-    setRole(data?.role ?? null)
-    setAgentId(data?.agent_id ?? null)
+    console.log('[AuthContext] app_users lookup data:', data)
+    console.log('[AuthContext] app_users lookup error:', JSON.stringify(error))
+
+    if (data) {
+      setRole(data.role)
+      setAgentId(data.agent_id ?? null)
+    } else if (session.user.email === 'ren@fractionalcx.com') {
+      console.log('[AuthContext] fallback: hardcoding admin for ren@fractionalcx.com')
+      setRole('admin')
+      setAgentId(null)
+    } else {
+      setRole(null)
+      setAgentId(null)
+    }
   }
 
   useEffect(() => {
