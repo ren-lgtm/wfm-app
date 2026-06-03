@@ -104,19 +104,27 @@ function getSlotsForDate(schedule, agentId, monday, targetDate) {
   return schedule[agentId]?.[dayIdx] || {}
 }
 
+// Returns the current hour in PT (0–23), derived from ET via Intl API.
+// Columns are indexed in PT, so this is the correct column to highlight.
+function getCurrentPtHour() {
+  const etHour = parseInt(
+    new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false })
+  ) % 24  // midnight can return 24 in some browsers
+  return (etHour - 3 + 24) % 24
+}
+
 // Determine if a (date, hour) is in the past, current, or future relative to now
 function hourStatus(date, hour) {
-  const now = new Date()
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
 
   if (d < todayStart) return 'past'
   if (d > todayStart) return 'future'
-  // same day
-  const currentHour = now.getHours()
-  if (hour < currentHour) return 'past'
-  if (hour === currentHour) return 'current'
+  // same day — compare against current PT hour (columns are PT-indexed)
+  const currentPtHour = getCurrentPtHour()
+  if (hour < currentPtHour) return 'past'
+  if (hour === currentPtHour) return 'current'
   return 'future'
 }
 
@@ -451,9 +459,8 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   // Always show full 24 h as requested, but we'll grey out dead zones
   const hours = ALL_HOURS
 
-  // Current time info for highlighting
-  const now = new Date()
-  const currentHour = now.getHours()
+  // Current time info for highlighting — currentHour is a PT column index
+  const currentHour = getCurrentPtHour()
   const isToday = isoStr(date) === isoStr(new Date())
 
   // Per-hour coverage counts
@@ -520,7 +527,18 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto relative">
+        {isToday && (
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 z-[8]"
+            style={{
+              left:        140 + currentHour * HOUR_COL_W,
+              width:       HOUR_COL_W,
+              borderLeft:  '2px solid rgb(59,130,246)',
+              background:  'rgba(30,58,138,0.08)',
+            }}
+          />
+        )}
         <table className="text-[10px] border-collapse w-full" style={{ minWidth: 24 * HOUR_COL_W + 140 }}>
 
           {/* ── Column widths ── */}
@@ -555,9 +573,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
 
             {/* ET hour labels row */}
             <tr>
-              <th className="sticky left-0 z-20 bg-[#141922] text-right pr-2 py-0.5 text-[9px] font-semibold text-gray-600 border-r border-[#2A3245]">
-                ET
-              </th>
+              <th className="sticky left-0 z-20 bg-[#141922] border-r border-[#2A3245]" />
               {hours.map(h => {
                 const isCurrent = isToday && h === currentHour
                 const isPast    = isToday && h < currentHour
@@ -568,7 +584,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                     key={h}
                     className={`py-0.5 text-center font-mono text-[9px] border-[#2A3245] ${
                       isCurrent
-                        ? 'text-blue-300/50 bg-blue-950/30 border-l-2 border-l-blue-500'
+                        ? 'text-blue-300/50 bg-blue-950/30'
                         : isPhone
                           ? isPast ? 'text-emerald-900/60 bg-emerald-950/40' : 'text-emerald-700/60 bg-emerald-950/40'
                           : isPast
@@ -580,13 +596,13 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </th>
                 )
               })}
+              <th className="py-0.5 px-2 text-[9px] font-semibold text-gray-600 text-left whitespace-nowrap">ET</th>
             </tr>
 
             {/* PT hour labels row */}
             <tr>
               <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-2 text-xs font-semibold text-gray-300 border-b border-r border-[#2A3245]">
-                <div>Agent</div>
-                <div className="text-right text-[9px] font-semibold text-gray-600 -mt-0.5">PT</div>
+                Agent
               </th>
               {hours.map(h => {
                 const isCurrent  = isToday && h === currentHour
@@ -597,7 +613,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                     key={h}
                     className={`py-2 text-center font-mono border-b border-[#2A3245] ${
                       isCurrent
-                        ? 'text-blue-400 bg-blue-950/30 border-l-2 border-l-blue-500'
+                        ? 'text-blue-400 bg-blue-950/30'
                         : isPhone
                           ? isPast ? 'text-emerald-900 bg-emerald-950/40' : 'text-emerald-600 bg-emerald-950/40'
                           : isPast
@@ -609,6 +625,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </th>
                 )
               })}
+              <th className="py-2 px-2 text-[9px] font-semibold text-gray-600 border-b border-[#2A3245] text-left whitespace-nowrap">PT</th>
             </tr>
           </thead>
 
@@ -662,7 +679,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                             onClick={canEdit ? () => openShiftModal(agent, startH, slots) : undefined}
                             className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/40' : ''} ${
                               isCurrent
-                                ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
+                                ? 'bg-blue-950/20'
                                 : isPhone
                                   ? 'bg-emerald-950/20'
                                   : ''
@@ -681,7 +698,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                           colSpan={span}
                           onClick={canEdit ? () => openShiftModal(agent, startH, slots) : undefined}
                           className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer' : ''} ${
-                            isCurrent ? 'border-l-2 border-l-blue-500' : ''
+                            ''
                           }`}
                         >
                           <div
