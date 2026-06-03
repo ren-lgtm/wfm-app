@@ -648,6 +648,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           <colgroup>
             <col style={{ width: 140, minWidth: 140 }} />
             {hours.map(h => <col key={h} style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W }} />)}
+            <col style={{ width: 48, minWidth: 48 }} />
           </colgroup>
 
           <thead>
@@ -672,6 +673,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                 if (isPhone) return null  // consumed by colspan above
                 return <th key={h} className="pt-1 pb-0" />
               })}
+              <th className="pt-1 pb-0" />
             </tr>
 
             {/* ET hour labels row */}
@@ -699,6 +701,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </th>
                 )
               })}
+              <th className="py-0.5 border-l border-[#2A3245]" />
               <th className="py-0.5 px-2 text-[9px] font-semibold text-gray-600 text-left whitespace-nowrap">ET</th>
             </tr>
 
@@ -728,6 +731,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </th>
                 )
               })}
+              <th className="py-2 px-1 text-[9px] font-semibold text-gray-500 border-b border-l border-[#2A3245] text-center whitespace-nowrap">Total</th>
               <th className="py-2 px-2 text-[9px] font-semibold text-gray-600 border-b border-[#2A3245] text-left whitespace-nowrap">PT</th>
             </tr>
           </thead>
@@ -863,6 +867,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                       )
                     })
                   })()}
+                  {/* Total worked hours for this agent/day */}
+                  {(() => {
+                    const worked = Object.values(slots).filter(a => a && a !== 'off' && a !== 'lunch').length
+                    return (
+                      <td className="py-1 px-1 text-center border-l border-[#2A3245] text-[10px] font-mono text-gray-400 whitespace-nowrap">
+                        {worked > 0 ? `${worked}h` : <span className="text-gray-700">—</span>}
+                      </td>
+                    )
+                  })()}
                 </tr>
               )
             })}
@@ -870,7 +883,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
             {/* ── Divider row between agents and summary ── */}
             <tr>
               <td
-                colSpan={hours.length + 1}
+                colSpan={hours.length + 2}
                 className="h-px bg-[#2A3245]"
               />
             </tr>
@@ -892,6 +905,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   ? <span className="font-mono font-semibold text-blue-300">{n}</span>
                   : <span className="text-gray-700">—</span>
               }}
+              summaryCell={(() => {
+                const peak = Math.max(0, ...hours.map(h => coverage[h].emailStaff))
+                return peak > 0 ? <span className="font-semibold text-blue-300">{peak}</span> : <span className="text-gray-700">—</span>
+              })()}
             />
 
             {/* Email Volume */}
@@ -910,6 +927,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </span>
                 )
               }}
+              summaryCell={(() => {
+                const total = hours.reduce((s, h) => s + emailVolume(h), 0)
+                return total > 0 ? <span className="text-gray-400">{total}</span> : <span className="text-gray-700">—</span>
+              })()}
             />
 
             {/* Email Needed */}
@@ -924,6 +945,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   ? <span className="font-mono text-gray-500">{n}</span>
                   : <span className="text-gray-700">—</span>
               }}
+              summaryCell={(() => {
+                const peak = Math.max(0, ...hours.map(h => emailNeeded(h)))
+                return peak > 0 ? <span className="text-gray-500">{peak}</span> : <span className="text-gray-700">—</span>
+              })()}
             />
 
             {/* Email Gap */}
@@ -947,6 +972,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </div>
                 )
               }}
+              summaryCell={(() => {
+                const gapSum = hours.reduce((s, h) => {
+                  const diff = coverage[h].emailStaff - emailNeeded(h)
+                  return diff < 0 ? s + diff : s
+                }, 0)
+                if (gapSum === 0) return <span className="text-gray-700">—</span>
+                const st = GAP_STATUS.critical
+                return <div className={`rounded text-[9px] font-mono font-semibold px-0.5 py-0.5 text-center border ${st.bg} ${st.text} ${st.border}`}>{gapSum}</div>
+              })()}
             />
 
             {/* ══════════════════════════════════════════
@@ -966,6 +1000,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   ? <span className="font-mono font-semibold text-emerald-300">{n}</span>
                   : <span className="text-gray-700">—</span>
               }}
+              summaryCell={(() => {
+                const peak = Math.max(0, ...hours.map(h => coverage[h].phoneStaff))
+                return peak > 0 ? <span className="font-semibold text-emerald-300">{peak}</span> : <span className="text-gray-700">—</span>
+              })()}
             />
 
             {/* Phone Volume */}
@@ -984,6 +1022,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </span>
                 )
               }}
+              summaryCell={(() => {
+                const total = hours.reduce((s, h) => s + phoneVolume(h), 0)
+                return total > 0 ? <span className="text-gray-400">{total}</span> : <span className="text-gray-700">—</span>
+              })()}
             />
 
             {/* Phone Needed */}
@@ -998,6 +1040,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   ? <span className="font-mono text-gray-500">{n}</span>
                   : <span className="text-gray-700">—</span>
               }}
+              summaryCell={(() => {
+                const peak = Math.max(0, ...hours.map(h => phoneNeeded(h)))
+                return peak > 0 ? <span className="text-gray-500">{peak}</span> : <span className="text-gray-700">—</span>
+              })()}
             />
 
             {/* Phone Gap */}
@@ -1021,6 +1067,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </div>
                 )
               }}
+              summaryCell={(() => {
+                const gapSum = hours.reduce((s, h) => {
+                  const diff = coverage[h].phoneStaff - phoneNeeded(h)
+                  return diff < 0 ? s + diff : s
+                }, 0)
+                if (gapSum === 0) return <span className="text-gray-700">—</span>
+                const st = GAP_STATUS.critical
+                return <div className={`rounded text-[9px] font-mono font-semibold px-0.5 py-0.5 text-center border ${st.bg} ${st.text} ${st.border}`}>{gapSum}</div>
+              })()}
             />
           </tbody>
         </table>
@@ -1061,6 +1116,8 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   )
 }
 
+const SUMMARY_CELL_CLS = 'py-1 px-1 text-center text-[10px] font-mono border-l border-[#2A3245] whitespace-nowrap'
+
 // Group header row (Email / Phone separator)
 function CoverageGroupHeader({ label, hours, isToday, currentHour }) {
   return (
@@ -1084,12 +1141,13 @@ function CoverageGroupHeader({ label, hours, isToday, currentHour }) {
           />
         )
       })}
+      <td className={`${SUMMARY_CELL_CLS} bg-[#0F1520]`} />
     </tr>
   )
 }
 
 // Generic coverage summary row
-function CoverageRow({ label, hours, isToday, currentHour, renderCell, isGapRow = false }) {
+function CoverageRow({ label, hours, isToday, currentHour, renderCell, isGapRow = false, summaryCell }) {
   return (
     <tr className={`border-t border-[#1A1F2E] ${isGapRow ? 'bg-[#0C0F14]/60' : 'bg-[#0C0F14]/40'}`}>
       <td className="sticky left-0 z-10 bg-[#0C0F14]/80 border-r border-[#2A3245] px-4 py-1">
@@ -1113,6 +1171,9 @@ function CoverageRow({ label, hours, isToday, currentHour, renderCell, isGapRow 
           </td>
         )
       })}
+      <td className={SUMMARY_CELL_CLS}>
+        {summaryCell ?? <span className="text-gray-700">—</span>}
+      </td>
     </tr>
   )
 }
