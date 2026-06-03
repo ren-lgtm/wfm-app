@@ -85,7 +85,7 @@ export function useSchedule({ userId } = {}) {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadWeek(currentMonday) }, [currentMonday, loadWeek])
+  useEffect(() => { if (userId) loadWeek(currentMonday) }, [currentMonday, loadWeek, userId])
 
   // Save a single slot change
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
@@ -207,7 +207,7 @@ export function useSchedule({ userId } = {}) {
     }
   }, [])
 
-  useEffect(() => { loadDayNotes(currentMonday) }, [currentMonday, loadDayNotes])
+  useEffect(() => { if (userId) loadDayNotes(currentMonday) }, [currentMonday, loadDayNotes, userId])
 
   const updateDayNote = useCallback(async (day, note) => {
     const weekStart = toISODate(currentMonday)
