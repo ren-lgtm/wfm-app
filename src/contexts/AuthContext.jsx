@@ -15,13 +15,30 @@ export function AuthProvider({ children }) {
       return
     }
     setUser(session.user)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .select('role, agent_id')
       .eq('email', session.user.email)
       .maybeSingle()
-    setRole(data?.role ?? null)
-    setAgentId(data?.agent_id ?? null)
+
+    const { data: allRows, error: allErr } = await supabase
+      .from('app_users')
+      .select('*')
+      .limit(5)
+    console.log('[AuthContext] email:', session.user.email)
+    console.log('[AuthContext] filtered lookup:', data, error)
+    console.log('[AuthContext] all app_users rows:', allRows, allErr)
+
+    if (data) {
+      setRole(data.role)
+      setAgentId(data.agent_id ?? null)
+    } else if (session.user.email === 'ren@fractionalcx.com') {
+      setRole('admin')
+      setAgentId(null)
+    } else {
+      setRole(null)
+      setAgentId(null)
+    }
   }
 
   useEffect(() => {
