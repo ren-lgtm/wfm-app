@@ -403,7 +403,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
 
 // ─── Day View ─────────────────────────────────────────────────────────────────
 
-function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate }) {
+function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate, userRole, userAgentId }) {
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
@@ -450,7 +450,13 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
 
   // Shift modal state — only enabled when showing live (non-template) data
-  const canEdit = !!updateSlot && !isTemplate
+  // Members can only edit their own agent row
+  const canEditAny = !!updateSlot && !isTemplate
+  const canEditAgent = (agId) => {
+    if (!canEditAny) return false
+    if (userRole === 'member') return agId === userAgentId
+    return true
+  }
   const [shiftModal, setShiftModal] = useState(null)
 
   // ── Drag state ─────────────────────────────────────────────────────────────
@@ -476,7 +482,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   }
 
   const handlePointerMove = useCallback((e) => {
-    if (!drag || !canEdit) return
+    if (!drag || !canEditAny) return
     e.preventDefault()
     const h = clientXToHour(e.clientX)
     if (h === null) return
@@ -516,10 +522,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         setDrag(d => ({ ...d, previewStart: newStart }))
       }
     }
-  }, [drag, canEdit, agentSlots])
+  }, [drag, canEditAny, agentSlots])
 
   const handlePointerUp = useCallback((e) => {
-    if (!drag || !canEdit) return
+    if (!drag || !canEditAny) return
     const { type, agentId, dow: d, origStart, origEnd, activity, previewStart, previewEnd, conflict, edge } = drag
     setDrag(null)
     if (conflict) return
@@ -550,10 +556,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         }
       }
     }
-  }, [drag, canEdit, updateSlot])
+  }, [drag, canEditAny, updateSlot])
 
   const openShiftModal = (agent, h, slots) => {
-    if (!canEdit || justDragged.current) return
+    if (!canEditAgent(agent.id) || justDragged.current) return
     setShiftModal({ agent, clickedHour: h, agentSlots: slots })
   }
 
@@ -759,6 +765,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           <tbody>
             {/* ── Agent rows ── */}
             {agents.map((agent, idx) => {
+              const canEdit = canEditAgent(agent.id)
               const baseSlots = agentSlots[agent.id] || {}
               const isBeingDragged = drag && drag.agentId === agent.id
               const slots = (isBeingDragged && !drag.conflict)
@@ -1593,6 +1600,8 @@ export default function TimelineView({
   onViewChange,
   onWeekChange,
   handleRate,
+  userRole,
+  userAgentId,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
 
@@ -1855,6 +1864,8 @@ export default function TimelineView({
           updateSlot={updateSlot}
           shiftTypes={shiftTypes}
           handleRate={handleRate}
+          userRole={userRole}
+          userAgentId={userAgentId}
         />
       )}
 

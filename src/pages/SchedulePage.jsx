@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown, Copy,
   Users, BarChart2, Calendar, LayoutGrid,
-  GitBranch, TrendingUp, Clock, Target, Settings,
+  GitBranch, TrendingUp, Clock, Target, Settings, LogOut,
 } from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
 import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
@@ -13,6 +13,7 @@ import SettingsPage from './SettingsPage'
 import { DAYS, formatWeekLabel } from '../lib/forecast'
 import { usePeriodKPIs } from '../hooks/usePeriodKPIs'
 import { useAvgHandleRate } from '../hooks/useAvgHandleRate'
+import { useAuth } from '../contexts/AuthContext'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 
@@ -112,6 +113,8 @@ function MultiWeekView({ agents, currentMonday, goToWeek, onOpenTimeline, foreca
 // ─── Main app ─────────────────────────────────────────────────────────────────
 
 export default function SchedulePage({ theme, toggleTheme }) {
+  const { role, agentId: userAgentId, user, signOut } = useAuth()
+
   const {
     agents, currentMonday, weekSchedule, forecast, slaData, saving, saveError, loadError,
     copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot, addAgent,
@@ -230,7 +233,11 @@ export default function SchedulePage({ theme, toggleTheme }) {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-          {NAV.map(item => {
+          {NAV.filter(item => {
+            if (item.id === 'users')    return role === 'admin'
+            if (item.id === 'forecast') return role === 'admin' || role === 'lead'
+            return true
+          }).map(item => {
             const Icon = item.icon
 
             // Single-level item (Users)
@@ -305,20 +312,22 @@ export default function SchedulePage({ theme, toggleTheme }) {
           })}
         </nav>
 
-        {/* Bottom: settings + theme toggle */}
+        {/* Bottom: settings + theme toggle + sign out */}
         <div className="px-2 py-3 border-t space-y-0.5" style={{ borderColor: 'var(--border-primary)' }}>
-          <button
-            onClick={() => setActiveView('settings')}
-            title={!sidebarOpen ? 'Settings' : undefined}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
-              activeView === 'settings'
-                ? 'bg-[#2A3245] text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E]'
-            } ${!sidebarOpen ? 'justify-center' : ''}`}
-          >
-            <Settings size={15} className="shrink-0" />
-            {sidebarOpen && <span>Settings</span>}
-          </button>
+          {role === 'admin' && (
+            <button
+              onClick={() => setActiveView('settings')}
+              title={!sidebarOpen ? 'Settings' : undefined}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
+                activeView === 'settings'
+                  ? 'bg-[#2A3245] text-white'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E]'
+              } ${!sidebarOpen ? 'justify-center' : ''}`}
+            >
+              <Settings size={15} className="shrink-0" />
+              {sidebarOpen && <span>Settings</span>}
+            </button>
+          )}
           <button
             onClick={toggleTheme}
             title={!sidebarOpen ? (theme === 'dark' ? 'Light mode' : 'Dark mode') : undefined}
@@ -327,6 +336,16 @@ export default function SchedulePage({ theme, toggleTheme }) {
             <span className="text-base leading-none">{theme === 'dark' ? '☀️' : '🌙'}</span>
             {sidebarOpen && (
               <span className="text-xs">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            )}
+          </button>
+          <button
+            onClick={signOut}
+            title={!sidebarOpen ? 'Sign out' : undefined}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-gray-500 hover:text-red-400 hover:bg-[#1A1F2E] w-full ${!sidebarOpen ? 'justify-center' : ''}`}
+          >
+            <LogOut size={15} className="shrink-0" />
+            {sidebarOpen && (
+              <span className="text-xs truncate">{user?.email ?? 'Sign out'}</span>
             )}
           </button>
         </div>
@@ -415,6 +434,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 onViewChange={handleViewChange}
                 onWeekChange={goToWeek}
                 handleRate={benchmarkRate}
+                userRole={role}
+                userAgentId={userAgentId}
               />
             </>
           )}
@@ -457,7 +478,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
           )}
 
           {/* ── USERS ── */}
-          {activeView === 'users' && <UsersPage addAgent={addAgent} />}
+          {activeView === 'users' && role === 'admin' && <UsersPage addAgent={addAgent} />}
 
           {/* ── SETTINGS ── */}
           {activeView === 'settings' && (
