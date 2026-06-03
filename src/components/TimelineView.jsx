@@ -421,10 +421,16 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const { schedule: templateSchedule, weekStart: templateWeekStart, loading: templateLoading } =
     useLatestWeekSchedule(hasDayData ? [] : agents)  // skip fetch when we have live data
 
+  // Whether the parent has already loaded the correct week for this date.
+  // If monday matches the date's week, we're showing live data (even if empty for this day).
+  const dateMondayStr = toISODate(getMondayOfWeek(date))
+  const isSameWeek    = toISODate(monday) === dateMondayStr
+
   // The schedule source we actually render:
   // - live data for this date if it exists
-  // - otherwise the template week's same day-of-week
-  const isTemplate = !hasDayData && !!templateSchedule
+  // - show template ONLY when the correct week isn't loaded yet and we have a fallback
+  // - never show template if we're already on the correct week (empty weekend = editable empty)
+  const isTemplate = !hasDayData && !!templateSchedule && !isSameWeek
   const effectiveSchedule = isTemplate ? templateSchedule : schedule
   const effectiveMonday   = isTemplate
     ? new Date(templateWeekStart + 'T00:00:00') // treat template monday as anchor
@@ -1600,10 +1606,11 @@ export default function TimelineView({
     const selectedMonday    = getMondayOfWeek(selectedDate)
     const selectedMondayStr = toISODate(selectedMonday)
     const currentMondayStr  = liveMonday ? toISODate(liveMonday) : null
+    console.log('[week-sync] selectedDate:', toISODate(selectedDate), '→ selectedMonday:', selectedMondayStr, '| liveMonday:', currentMondayStr, '| same:', selectedMondayStr === currentMondayStr)
     if (selectedMondayStr !== currentMondayStr) {
       onWeekChange(selectedMonday)
     }
-  }, [selectedDate])
+  }, [selectedDate, liveMonday])
 
   // Schedule (mock or live)
   const mockSchedule = useMemo(() => buildMockSchedule(), [])
