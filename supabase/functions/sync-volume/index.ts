@@ -32,17 +32,17 @@ function ptDayName(utcTimestamp: number): string {
 }
 
 async function syncAircall(targetDate: Date) {
-  const from = Math.floor(targetDate.getTime() / 1000)
-  const to   = from + 86400
+  const from          = Math.floor(targetDate.getTime() / 1000) - PT_OFFSET * 3600
+  const to            = from + 86400
+  const targetPtDate  = ptDateStr(from)
 
   const auth = btoa(`${AIRCALL_API_ID}:${AIRCALL_API_TOKEN}`)
   let page    = 1
   let hasMore = true
 
-  const hourCounts: Record<number, number> = {}
-  const hourSLA: Record<number, { answered: number; missed: number; waitSecs: number[] }> = {}
+  const byDateVolume: Record<string, Record<number, number>> = {}
+  const byDateSLA: Record<string, Record<number, { answered: number; missed: number; waitSecs: number[] }>> = {}
 
-  let callCount = 0
   while (hasMore) {
     const res = await fetch(
       `https://api.aircall.io/v1/calls?direction=inbound&from=${from}&to=${to}&per_page=50&page=${page}`,
@@ -51,30 +51,25 @@ async function syncAircall(targetDate: Date) {
     const data  = await res.json()
     const calls = data.calls || []
 
-    // Debug: log first 3 calls' raw fields
-    for (let i = 0; i < Math.min(3, calls.length); i++) {
-      const c = calls[i]
-      console.log(`[Aircall debug call ${callCount + i + 1}] answered_at=${c.answered_at}, duration=${c.duration}, started_at=${c.started_at}, is_answered=${c.is_answered}`)
-    }
-    callCount += calls.length
-
     for (const call of calls) {
+      const d            = ptDateStr(call.started_at)
+      if (d !== targetPtDate) continue
       const h            = ptHour(call.started_at)
       const inPhoneHours = h >= PHONE_START && h < PHONE_END
 
-      hourCounts[h] = (hourCounts[h] || 0) + 1
+      if (!byDateVolume[d]) byDateVolume[d] = {}
+      byDateVolume[d][h] = (byDateVolume[d][h] || 0) + 1
 
       if (inPhoneHours) {
-        if (!hourSLA[h]) hourSLA[h] = { answered: 0, missed: 0, waitSecs: [] }
+        if (!byDateSLA[d]) byDateSLA[d] = {}
+        if (!byDateSLA[d][h]) byDateSLA[d][h] = { answered: 0, missed: 0, waitSecs: [] }
         const wasAnswered = call.answered_at && call.answered_at > 0 && call.duration > 0 && call.answered_at > call.started_at
         if (wasAnswered) {
-          hourSLA[h].answered++
-          if (call.answered_at && call.started_at) {
-            const wait = call.answered_at - call.started_at
-            if (wait >= 0 && wait < 600) hourSLA[h].waitSecs.push(wait)
-          }
+          byDateSLA[d][h].answered++
+          const wait = call.answered_at - call.started_at
+          if (wait >= 0 && wait < 600) byDateSLA[d][h].waitSecs.push(wait)
         } else {
-          hourSLA[h].missed++
+          byDateSLA[d][h].missed++
         }
       }
     }
@@ -84,38 +79,44 @@ async function syncAircall(targetDate: Date) {
     await new Promise(r => setTimeout(r, 500))
   }
 
-  const dateStr = ptDateStr(from - PT_OFFSET * 3600)
-  const dayName = ptDayName(from - PT_OFFSET * 3600)
-
-  const volumeRows = Object.entries(hourCounts).map(([hour, count]) => ({
-    date: dateStr,
-    hour: parseInt(hour),
-    call_count: count,
-    day_of_week: dayName,
-  }))
+  const volumeRows = []
+  for (const [date, hours] of Object.entries(byDateVolume)) {
+    const dayName = ptDayName(new Date(date + 'T00:00:00Z').getTime() / 1000 - PT_OFFSET * 3600)
+    for (const [hour, count] of Object.entries(hours)) {
+      volumeRows.push({ date, hour: parseInt(hour), call_count: count, day_of_week: dayName })
+    }
+  }
 
   if (volumeRows.length) {
     await supabase.from('phone_volume').upsert(volumeRows, { onConflict: 'date,hour' })
-    console.log(`Aircall volume: ${volumeRows.length} rows for ${dateStr}`)
+    console.log(`Aircall volume: ${volumeRows.length} rows across ${Object.keys(byDateVolume).length} dates`)
   }
 
-  const slaRows = Object.entries(hourSLA).map(([hour, d]) => ({
-    date: dateStr,
-    hour: parseInt(hour),
-    day_of_week: dayName,
-    answered: d.answered,
-    missed: d.missed,
-    avg_wait_secs: d.waitSecs.length
-      ? Math.round(d.waitSecs.reduce((a, b) => a + b, 0) / d.waitSecs.length)
-      : null,
-  }))
+  const allSlaDates = Object.keys(byDateSLA)
+  for (const date of allSlaDates) {
+    await supabase.from('phone_sla').delete().eq('date', date)
+  }
 
-  const deleteResult = await supabase.from('phone_sla').delete().eq('date', dateStr)
-  console.log(`Aircall delete for date=${dateStr}: error=${deleteResult.error}, deleted rows count via count()`)
+  const slaRows = []
+  for (const [date, hours] of Object.entries(byDateSLA)) {
+    const dayName = ptDayName(new Date(date + 'T00:00:00Z').getTime() / 1000 - PT_OFFSET * 3600)
+    for (const [hour, d] of Object.entries(hours)) {
+      slaRows.push({
+        date,
+        hour: parseInt(hour),
+        day_of_week: dayName,
+        answered: d.answered,
+        missed: d.missed,
+        avg_wait_secs: d.waitSecs.length
+          ? Math.round(d.waitSecs.reduce((a, b) => a + b, 0) / d.waitSecs.length)
+          : null,
+      })
+    }
+  }
 
   if (slaRows.length) {
     await supabase.from('phone_sla').upsert(slaRows, { onConflict: 'date,hour' })
-    console.log(`Aircall SLA: ${slaRows.length} rows for ${dateStr}`)
+    console.log(`Aircall SLA: ${slaRows.length} rows across ${allSlaDates.length} dates`)
   }
 }
 
