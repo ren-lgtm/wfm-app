@@ -13,7 +13,7 @@ export default function LoginPage() {
     setLoading(true)
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: false },
     })
     setLoading(false)
     if (err) {
