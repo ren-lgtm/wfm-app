@@ -475,22 +475,17 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     const h = clientXToHour(e.clientX)
     if (h === null) return
     const base = agentSlots[drag.agentId] || {}
-    console.log('[drag] pointermove agentId:', drag.agentId, 'h:', h, 'foundInSlotMap:', drag.agentId in agentSlots, 'baseKeys:', Object.keys(base).length, 'containerRect:', containerRef.current?.getBoundingClientRect())
+    const isRealActivity = (a, currentAct) => a && a !== 'off' && a !== currentAct
 
     if (drag.type === 'move') {
       const len      = drag.origEnd - drag.origStart
       const newStart = Math.max(0, Math.min(23 - len, h - drag.offsetH))
       const newEnd   = newStart + len
       let conflict   = false
-      let conflictAt = null
       for (let i = newStart; i <= newEnd; i++) {
-        const ex = base[i]
-        if (ex && ex !== drag.activity && (i < drag.origStart || i > drag.origEnd)) {
-          conflict = true; conflictAt = { hour: i, activity: ex }; break
+        if (isRealActivity(base[i], drag.activity) && (i < drag.origStart || i > drag.origEnd)) {
+          conflict = true; break
         }
-      }
-      if (newStart < drag.origStart) {
-        console.log('[drag-move-left] agentId:', drag.agentId, 'origStart:', drag.origStart, 'newStart:', newStart, 'offsetH:', drag.offsetH, 'conflict:', conflict, 'conflictAt:', conflictAt, 'baseKeys:', Object.keys(base))
       }
       setDrag(d => ({
         ...d,
@@ -502,18 +497,16 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
       if (drag.edge === 'right') {
         let maxEnd = 23
         for (let i = drag.origEnd + 1; i <= 23; i++) {
-          if (base[i] && base[i] !== drag.activity) { maxEnd = i - 1; break }
+          if (isRealActivity(base[i], drag.activity)) { maxEnd = i - 1; break }
         }
         const newEnd = Math.max(drag.origStart, Math.min(maxEnd, h))
         setDrag(d => ({ ...d, previewEnd: newEnd }))
       } else {
         let minStart = 0
-        let conflictActivity = null
         for (let i = drag.origStart - 1; i >= 0; i--) {
-          if (base[i] && base[i] !== drag.activity) { minStart = i + 1; conflictActivity = base[i]; break }
+          if (isRealActivity(base[i], drag.activity)) { minStart = i + 1; break }
         }
         const newStart = Math.min(drag.origEnd, Math.max(minStart, h))
-        console.log('[drag-left] agentId:', drag.agentId, 'origStart:', drag.origStart, 'scanned hours:', `${drag.origStart - 1}→0`, 'minStart:', minStart, 'conflicting activity found:', conflictActivity, 'newStart:', newStart, 'h:', h, 'baseKeys:', Object.keys(base))
         setDrag(d => ({ ...d, previewStart: newStart }))
       }
     }
@@ -826,7 +819,6 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               if (e.target !== e.currentTarget && e.target.dataset.handle) return
                               e.stopPropagation()
                               const h = clientXToHour(e.clientX)
-                              console.log('[drag] pointerdown agentId:', agent.id, 'name:', agent.name, 'startH:', startH, 'h:', h, 'inSlotMap:', agentId in agentSlots)
                               setDrag({
                                 type: 'move', agentId: agent.id, dow,
                                 origStart: startH, origEnd: endH, activity,
