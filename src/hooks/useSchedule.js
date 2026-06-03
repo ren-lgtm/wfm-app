@@ -16,7 +16,10 @@ export function useSchedule({ userId } = {}) {
   useEffect(() => {
     if (!userId) return
     supabase.from('agents').select('*').eq('active', true).order('name')
-      .then(({ data }) => data && setAgents(data))
+      .then(({ data, error }) => {
+        console.log('[useSchedule] agents data:', data, 'error:', error)
+        if (data) setAgents(data)
+      })
   }, [userId])
 
   // Load forecast + SLA data from DB
