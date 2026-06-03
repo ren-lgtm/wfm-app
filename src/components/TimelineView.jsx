@@ -475,6 +475,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     const h = clientXToHour(e.clientX)
     if (h === null) return
     const base = agentSlots[drag.agentId] || {}
+    console.log('[drag] pointermove agentId:', drag.agentId, 'h:', h, 'foundInSlotMap:', drag.agentId in agentSlots, 'baseKeys:', Object.keys(base).length, 'containerRect:', containerRef.current?.getBoundingClientRect())
 
     if (drag.type === 'move') {
       const len      = drag.origEnd - drag.origStart
@@ -819,6 +820,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               if (e.target !== e.currentTarget && e.target.dataset.handle) return
                               e.stopPropagation()
                               const h = clientXToHour(e.clientX)
+                              console.log('[drag] pointerdown agentId:', agent.id, 'name:', agent.name, 'startH:', startH, 'h:', h, 'inSlotMap:', agentId in agentSlots)
                               setDrag({
                                 type: 'move', agentId: agent.id, dow,
                                 origStart: startH, origEnd: endH, activity,
