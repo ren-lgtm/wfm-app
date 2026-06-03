@@ -460,18 +460,6 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const containerRef      = useRef(null)
   const justDragged       = useRef(false)
 
-  // Measure the exact left-edge pixel position of the current-hour column from the DOM.
-  // The table is w-full so columns expand beyond HOUR_COL_W — getBoundingClientRect() is accurate.
-  const [overlayLeft, setOverlayLeft] = useState(140 + currentHour * HOUR_COL_W)
-  useLayoutEffect(() => {
-    if (!containerRef.current || !isToday) return
-    const cell = containerRef.current.querySelector(`th[data-hour="${currentHour}"]`)
-    if (!cell) return
-    const containerRect = containerRef.current.getBoundingClientRect()
-    const cellRect      = cell.getBoundingClientRect()
-    setOverlayLeft(cellRect.left - containerRect.left + containerRef.current.scrollLeft)
-  })
-
   function clientXToHour(clientX) {
     if (!containerRef.current) return null
     const rect = containerRef.current.getBoundingClientRect()
@@ -576,6 +564,18 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   // Current time info for highlighting — currentHour is a PT column index
   const currentHour = getCurrentPtHour()
   const isToday = isoStr(date) === isoStr(new Date())
+
+  // Measure the exact left-edge pixel position of the current-hour column from the DOM.
+  // The table is w-full so columns expand beyond HOUR_COL_W — getBoundingClientRect() is accurate.
+  const [overlayLeft, setOverlayLeft] = useState(140 + currentHour * HOUR_COL_W)
+  useLayoutEffect(() => {
+    if (!containerRef.current || !isToday) return
+    const cell = containerRef.current.querySelector(`th[data-hour="${currentHour}"]`)
+    if (!cell) return
+    const containerRect = containerRef.current.getBoundingClientRect()
+    const cellRect      = cell.getBoundingClientRect()
+    setOverlayLeft(cellRect.left - containerRect.left + containerRef.current.scrollLeft)
+  })
 
   // Per-hour coverage counts
   const coverage = useMemo(() => {
