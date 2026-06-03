@@ -701,8 +701,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </th>
                 )
               })}
-              <th className="py-0.5 border-l border-[#2A3245]" />
-              <th className="py-0.5 px-2 text-[9px] font-semibold text-gray-600 text-left whitespace-nowrap">ET</th>
+              <th className="py-0.5 px-1 border-l border-[#2A3245] text-[9px] font-semibold text-gray-600 text-center">ET</th>
             </tr>
 
             {/* PT hour labels row */}
@@ -731,8 +730,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </th>
                 )
               })}
-              <th className="py-2 px-1 text-[9px] font-semibold text-gray-500 border-b border-l border-[#2A3245] text-center whitespace-nowrap">Total</th>
-              <th className="py-2 px-2 text-[9px] font-semibold text-gray-600 border-b border-[#2A3245] text-left whitespace-nowrap">PT</th>
+              <th className="py-1 px-1 border-b border-l border-[#2A3245] text-center">
+                <div className="text-[9px] font-semibold text-gray-500 leading-none">Total</div>
+                <div className="text-[8px] font-semibold text-gray-600 leading-none mt-0.5">PT</div>
+              </th>
             </tr>
           </thead>
 
