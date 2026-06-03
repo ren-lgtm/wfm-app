@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { getMondayOfWeek, toISODate, buildForecast, DAYS } from '../lib/forecast'
 
-export function useSchedule() {
+export function useSchedule({ userId } = {}) {
   const [agents, setAgents] = useState([])
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()))
   const [weekSchedule, setWeekSchedule] = useState({}) // { agentId: { Mon: { hour: activity } } }
@@ -12,16 +12,18 @@ export function useSchedule() {
   const [saveError, setSaveError] = useState(null)   // last write error message, or null
   const [loadError, setLoadError] = useState(null)   // last load error message, or null
 
-  // Load agents
+  // Load agents — gated on userId so this only runs after auth session is confirmed
   useEffect(() => {
+    if (!userId) return
     supabase.from('agents').select('*').eq('active', true).order('name')
       .then(({ data }) => data && setAgents(data))
-  }, [])
+  }, [userId])
 
   // Load forecast + SLA data from DB
   const [slaData, setSlaData] = useState({ byDay: {}, byHour: {} })
 
   useEffect(() => {
+    if (!userId) return
     async function loadForecast() {
       const [{ data: phoneRows }, { data: emailRows }, { data: slaRows }] = await Promise.all([
         supabase.from('phone_volume').select('day_of_week,hour,call_count'),
@@ -47,7 +49,7 @@ export function useSchedule() {
       setSlaData({ byDay, byHour })
     }
     loadForecast()
-  }, [])
+  }, [userId])
 
   // Load week schedule
   const loadWeek = useCallback(async (monday) => {

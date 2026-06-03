@@ -118,7 +118,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const {
     agents, currentMonday, weekSchedule, forecast, slaData, saving, saveError, loadError,
     copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot, addAgent,
-  } = useSchedule()
+  } = useSchedule({ userId: user?.id })
 
   const {
     shiftTypes, addShiftType, updateShiftType, deleteShiftType, reorderShiftType,
