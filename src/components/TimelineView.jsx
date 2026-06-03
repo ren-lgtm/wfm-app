@@ -395,7 +395,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
 
 // ─── Day View ─────────────────────────────────────────────────────────────────
 
-function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes }) {
+function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate }) {
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
@@ -1567,6 +1567,7 @@ export default function TimelineView({
           emailForecast={emailForecast}
           updateSlot={updateSlot}
           shiftTypes={shiftTypes}
+          handleRate={handleRate}
         />
       )}
 
