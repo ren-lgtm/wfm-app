@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import {
   hLabel, getMondayOfWeek, toISODate,
@@ -460,6 +460,18 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const containerRef      = useRef(null)
   const justDragged       = useRef(false)
 
+  // Measure the exact left-edge pixel position of the current-hour column from the DOM.
+  // The table is w-full so columns expand beyond HOUR_COL_W — getBoundingClientRect() is accurate.
+  const [overlayLeft, setOverlayLeft] = useState(140 + currentHour * HOUR_COL_W)
+  useLayoutEffect(() => {
+    if (!containerRef.current || !isToday) return
+    const cell = containerRef.current.querySelector(`th[data-hour="${currentHour}"]`)
+    if (!cell) return
+    const containerRect = containerRef.current.getBoundingClientRect()
+    const cellRect      = cell.getBoundingClientRect()
+    setOverlayLeft(cellRect.left - containerRect.left + containerRef.current.scrollLeft)
+  })
+
   function clientXToHour(clientX) {
     if (!containerRef.current) return null
     const rect = containerRef.current.getBoundingClientRect()
@@ -641,7 +653,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           <div
             className="pointer-events-none absolute top-0 bottom-0 z-[8]"
             style={{
-              left:        140 + currentHour * HOUR_COL_W,
+              left:        overlayLeft,
               width:       HOUR_COL_W,
               borderLeft:  '2px solid rgb(59,130,246)',
               background:  'rgba(30,58,138,0.08)',
@@ -722,6 +734,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                 return (
                   <th
                     key={h}
+                    data-hour={h}
                     className={`py-2 text-center font-mono border-b border-[#2A3245] ${
                       isCurrent
                         ? 'text-blue-400 bg-blue-950/30'
