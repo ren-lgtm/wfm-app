@@ -1140,7 +1140,7 @@ function CoverageGroupHeader({ label, hours, isToday, currentHour }) {
             key={h}
             className={`py-1 ${
               isCurrent
-                ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
+                ? 'bg-blue-950/20'
                 : isPhone
                   ? 'bg-emerald-950/30'
                   : 'bg-[#0F1520]'
@@ -1168,7 +1168,7 @@ function CoverageRow({ label, hours, isToday, currentHour, renderCell, isGapRow 
             key={h}
             className={`py-1 px-0.5 text-center text-[10px] ${
               isCurrent
-                ? 'bg-blue-950/20 border-l-2 border-l-blue-500'
+                ? 'bg-blue-950/20'
                 : isPhone
                   ? 'bg-emerald-950/20'
                   : ''
