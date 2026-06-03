@@ -413,6 +413,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 updateSlot={updateSlot}
                 shiftTypes={shiftTypes}
                 onViewChange={handleViewChange}
+                onWeekChange={goToWeek}
                 handleRate={benchmarkRate}
               />
             </>

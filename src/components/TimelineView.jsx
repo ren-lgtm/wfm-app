@@ -1572,6 +1572,7 @@ export default function TimelineView({
   updateSlot,
   shiftTypes,
   onViewChange,
+  onWeekChange,
   handleRate,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
@@ -1591,6 +1592,18 @@ export default function TimelineView({
     if (hasLiveData && liveMonday) return liveMonday
     return getMondayOfWeek(todayDate)
   }, [hasLiveData, liveMonday, todayDate])
+
+  // When selectedDate moves to a different week, sync the parent's currentMonday.
+  // This ensures useSchedule loads that week's data and updateSlot writes to the correct week_start.
+  useEffect(() => {
+    if (!onWeekChange || !hasLiveData) return
+    const selectedMonday    = getMondayOfWeek(selectedDate)
+    const selectedMondayStr = toISODate(selectedMonday)
+    const currentMondayStr  = liveMonday ? toISODate(liveMonday) : null
+    if (selectedMondayStr !== currentMondayStr) {
+      onWeekChange(selectedMonday)
+    }
+  }, [selectedDate])
 
   // Schedule (mock or live)
   const mockSchedule = useMemo(() => buildMockSchedule(), [])
