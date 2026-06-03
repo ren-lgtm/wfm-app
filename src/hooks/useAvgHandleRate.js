@@ -38,16 +38,17 @@ export function useAvgHandleRate() {
         byDate[dateKey].hours  += row.online_time_seconds / 3600
       }
 
-      const dailyRates = Object.entries(byDate)
-        .filter(([, d]) => d.hours > 0)
-        .map(([date, d]) => ({ date, rate: d.closed / d.hours, closed: d.closed, hours: d.hours }))
+      const validDays = Object.entries(byDate)
+        .filter(([, d]) => d.hours >= 0.5)
+        .map(([date, d]) => ({ date, closed: d.closed, hours: d.hours }))
 
-      console.log('[useAvgHandleRate] daily rates:', dailyRates)
+      console.log('[useAvgHandleRate] daily rates:', validDays)
 
-      if (dailyRates.length === 0) return
+      if (validDays.length === 0) return
 
-      const avg = dailyRates.reduce((a, b) => a + b.rate, 0) / dailyRates.length
-      setHandleRate(Math.round(avg * 10) / 10)
+      const totalClosed = validDays.reduce((a, d) => a + d.closed, 0)
+      const totalHours  = validDays.reduce((a, d) => a + d.hours,  0)
+      setHandleRate(Math.round((totalClosed / totalHours) * 10) / 10)
     }
 
     load()
