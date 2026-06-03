@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
       .from('app_users')
       .select('role, agent_id')
       .eq('email', session.user.email)
-      .single()
+      .maybeSingle()
     console.log('[AuthContext] email:', session.user.email)
     console.log('[AuthContext] app_users lookup:', data, 'error:', error)
     setRole(data?.role ?? null)
