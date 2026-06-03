@@ -1,6 +1,6 @@
 export const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-export const PHONE_START = 12
-export const PHONE_END = 19
+export const PHONE_START = 9
+export const PHONE_END = 16
 export const WORK_START = 8
 export const WORK_END = 21
 

@@ -11,23 +11,23 @@ const GORGIAS_SUBDOMAIN = Deno.env.get('GORGIAS_SUBDOMAIN')!
 const GORGIAS_EMAIL     = Deno.env.get('GORGIAS_EMAIL')!
 const GORGIAS_API_KEY   = Deno.env.get('GORGIAS_API_KEY')!
 
-const PHONE_START       = 12
-const PHONE_END         = 19
-const ET_OFFSET         = -4
+const PHONE_START       = 9
+const PHONE_END         = 16
+const PT_OFFSET         = -7
 const DAY_NAMES         = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const TRACKED_CHANNELS  = ['email', 'chat', 'article', 'contact_form']
 
-function etHour(utcTimestamp: number): number {
-  return (Math.floor(utcTimestamp / 3600) % 24 + ET_OFFSET + 24) % 24
+function ptHour(utcTimestamp: number): number {
+  return (Math.floor(utcTimestamp / 3600) % 24 + PT_OFFSET + 24) % 24
 }
 
-function etDateStr(utcTimestamp: number): string {
-  const d = new Date((utcTimestamp + ET_OFFSET * 3600) * 1000)
+function ptDateStr(utcTimestamp: number): string {
+  const d = new Date((utcTimestamp + PT_OFFSET * 3600) * 1000)
   return d.toISOString().split('T')[0]
 }
 
-function etDayName(utcTimestamp: number): string {
-  const d = new Date((utcTimestamp + ET_OFFSET * 3600) * 1000)
+function ptDayName(utcTimestamp: number): string {
+  const d = new Date((utcTimestamp + PT_OFFSET * 3600) * 1000)
   return DAY_NAMES[d.getUTCDay()]
 }
 
@@ -59,7 +59,7 @@ async function syncAircall(targetDate: Date) {
     callCount += calls.length
 
     for (const call of calls) {
-      const h            = etHour(call.started_at)
+      const h            = ptHour(call.started_at)
       const inPhoneHours = h >= PHONE_START && h < PHONE_END
 
       hourCounts[h] = (hourCounts[h] || 0) + 1
@@ -84,8 +84,8 @@ async function syncAircall(targetDate: Date) {
     await new Promise(r => setTimeout(r, 500))
   }
 
-  const dateStr = etDateStr(from - ET_OFFSET * 3600)
-  const dayName = etDayName(from - ET_OFFSET * 3600)
+  const dateStr = ptDateStr(from - PT_OFFSET * 3600)
+  const dayName = ptDayName(from - PT_OFFSET * 3600)
 
   const volumeRows = Object.entries(hourCounts).map(([hour, count]) => ({
     date: dateStr,
@@ -128,7 +128,7 @@ async function syncGorgias(targetDate: Date) {
 
   // ── Helper: convert UTC timestamp to ET date string ──
   function etDateFromTimestamp(utcTimestamp: number): string {
-    const d = new Date((utcTimestamp + ET_OFFSET * 3600) * 1000)
+    const d = new Date((utcTimestamp + PT_OFFSET * 3600) * 1000)
     return d.toISOString().split('T')[0]
   }
 
@@ -153,7 +153,7 @@ async function syncGorgias(targetDate: Date) {
       if (!TRACKED_CHANNELS.includes(t.channel)) continue
 
       const etDate = etDateFromTimestamp(Math.floor(created.getTime() / 1000))
-      const h = (created.getUTCHours() + ET_OFFSET + 24) % 24
+      const h = (created.getUTCHours() + PT_OFFSET + 24) % 24
 
       // Count as created
       if (!byDateCreated[etDate]) byDateCreated[etDate] = {}
