@@ -430,6 +430,19 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     ? new Date(templateWeekStart + 'T00:00:00') // treat template monday as anchor
     : monday
 
+  // For the template: we want the same day-of-week (0-6), not offset from today's monday.
+  function getSlotsForRender(agentId) {
+    if (isTemplate) return effectiveSchedule[agentId]?.[dayIdx] || {}
+    return getSlotsForDate(schedule, agentId, monday, date)
+  }
+
+  // Per-agent slot maps for this day — declared before drag handlers so they can reference it
+  const agentSlots = useMemo(() => {
+    const m = {}
+    for (const a of agents) m[a.id] = getSlotsForRender(a.id)
+    return m
+  }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
+
   // Shift modal state — only enabled when showing live (non-template) data
   const canEdit = !!updateSlot && !isTemplate
   const [shiftModal, setShiftModal] = useState(null)
@@ -537,22 +550,6 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     if (!canEdit || justDragged.current) return
     setShiftModal({ agent, clickedHour: h, agentSlots: slots })
   }
-
-  // For the template: we want the same day-of-week (0-6), not offset from today's monday.
-  // getSlotsForDate computes offset from monday; for template just read dayIdx directly.
-  function getSlotsForRender(agentId) {
-    if (isTemplate) {
-      return effectiveSchedule[agentId]?.[dayIdx] || {}
-    }
-    return getSlotsForDate(schedule, agentId, monday, date)
-  }
-
-  // Per-agent slot maps for this day
-  const agentSlots = useMemo(() => {
-    const m = {}
-    for (const a of agents) m[a.id] = getSlotsForRender(a.id)
-    return m
-  }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
 
   // Determine which hours have any activity (to auto-trim the display)
   // Always show full 24 h as requested, but we'll grey out dead zones
