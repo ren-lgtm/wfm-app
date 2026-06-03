@@ -29,21 +29,24 @@ export function useAvgHandleRate() {
 
       if (!data || data.length === 0) return
 
-      // Group by date, sum tickets_closed and online hours per day
+      // Group by date (normalize to YYYY-MM-DD in case Supabase returns a timestamp)
       const byDate = {}
       for (const row of data) {
-        if (!byDate[row.date]) byDate[row.date] = { closed: 0, hours: 0 }
-        byDate[row.date].closed += row.tickets_closed
-        byDate[row.date].hours  += row.online_time_seconds / 3600
+        const dateKey = String(row.date).slice(0, 10)
+        if (!byDate[dateKey]) byDate[dateKey] = { closed: 0, hours: 0 }
+        byDate[dateKey].closed += row.tickets_closed
+        byDate[dateKey].hours  += row.online_time_seconds / 3600
       }
 
-      const dailyRates = Object.values(byDate)
-        .filter(d => d.hours > 0)
-        .map(d => d.closed / d.hours)
+      const dailyRates = Object.entries(byDate)
+        .filter(([, d]) => d.hours > 0)
+        .map(([date, d]) => ({ date, rate: d.closed / d.hours, closed: d.closed, hours: d.hours }))
+
+      console.log('[useAvgHandleRate] daily rates:', dailyRates)
 
       if (dailyRates.length === 0) return
 
-      const avg = dailyRates.reduce((a, b) => a + b, 0) / dailyRates.length
+      const avg = dailyRates.reduce((a, b) => a + b.rate, 0) / dailyRates.length
       setHandleRate(Math.round(avg * 10) / 10)
     }
 
