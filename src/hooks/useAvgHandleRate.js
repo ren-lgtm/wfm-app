@@ -16,12 +16,16 @@ export function useAvgHandleRate() {
       const endStr   = end.toISOString().split('T')[0]
       const startStr = start.toISOString().split('T')[0]
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('agent_metrics')
         .select('date, tickets_closed, online_time_seconds')
         .gte('date', startStr)
         .lt('date', endStr)
         .not('online_time_seconds', 'is', null)
+
+      console.log('[useAvgHandleRate] range:', startStr, '→', endStr)
+      console.log('[useAvgHandleRate] rows:', data?.length ?? 0, 'error:', error)
+      console.log('[useAvgHandleRate] sample:', data?.slice(0, 3))
 
       if (!data || data.length === 0) return
 
