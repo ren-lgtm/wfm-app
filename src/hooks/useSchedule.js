@@ -59,7 +59,9 @@ export function useSchedule({ userId } = {}) {
   const loadWeek = useCallback(async (monday) => {
     setLoading(true)
     setLoadError(null)
-    const weekStart = toISODate(monday)
+    // monday is now a PT-anchored string from getMondayOfWeek (YYYY-MM-DD format)
+    // Use it directly as weekStart — don't pass through toISODate (would cause timezone shift)
+    const weekStart = monday
 
     const { data: schedules, error } = await supabase
       .from('schedules')
@@ -161,7 +163,7 @@ export function useSchedule({ userId } = {}) {
 
   // Save a single slot change
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
-    const weekStart = toISODate(currentMonday)
+    const weekStart = currentMonday
 
     // Snapshot previous state so we can rollback on failure
     let prevSnapshot
@@ -225,7 +227,7 @@ export function useSchedule({ userId } = {}) {
 
   // Mark agent as off for a day
   const markOff = useCallback(async (agentId, day) => {
-    const weekStart = toISODate(currentMonday)
+    const weekStart = currentMonday
     let prevSnapshot
     setWeekSchedule(prev => {
       prevSnapshot = prev
@@ -245,7 +247,7 @@ export function useSchedule({ userId } = {}) {
 
   // Unmark agent as off (clear the day)
   const unmarkOff = useCallback(async (agentId, day) => {
-    const weekStart = toISODate(currentMonday)
+    const weekStart = currentMonday
     let prevSnapshot
     setWeekSchedule(prev => {
       prevSnapshot = prev
@@ -282,7 +284,7 @@ export function useSchedule({ userId } = {}) {
   useEffect(() => { if (userId) loadDayNotes(currentMonday) }, [currentMonday, loadDayNotes, userId])
 
   const updateDayNote = useCallback(async (day, note) => {
-    const weekStart = toISODate(currentMonday)
+    const weekStart = currentMonday
     setDayNotes(prev => ({ ...prev, [day]: note }))
     await supabase.from('day_notes')
       .upsert({ week_start: weekStart, day_of_week: day, note },
@@ -294,7 +296,7 @@ export function useSchedule({ userId } = {}) {
     const lastMonday = new Date(currentMonday)
     lastMonday.setDate(lastMonday.getDate() - 7)
     const lastWeekStart = toISODate(lastMonday)
-    const thisWeekStart = toISODate(currentMonday)
+    const thisWeekStart = currentMonday
 
     setLoading(true)
     const { data: lastSchedules } = await supabase
