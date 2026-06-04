@@ -308,39 +308,37 @@ export default function SchedulePage({ theme, toggleTheme }) {
               </div>
 
               {/* KPI cards — always show when in timeline view */}
-              {kpis && (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Inbound calls · {viewInfo.label}</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">{kpis.calls.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">{kpis.hasFutureData ? 'actual + forecast' : 'actual'}</div>
-                  </div>
-                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Answer rate · {viewInfo.label}</div>
-                    <div className={`text-2xl font-mono font-medium ${kpis.answerRate !== null ? slaColor(kpis.answerRate) : 'text-gray-600'}`}>
-                      {kpis.answerRate !== null ? `${kpis.answerRate}%` : '—'}
-                    </div>
-                    <div className="text-[10px] text-gray-600 mt-1">{kpis.answerRate !== null ? 'target: 95%' : 'no data yet'}</div>
-                  </div>
-                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Tickets created · {viewInfo.label}</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">{kpis.ticketsCreated.toLocaleString()}</div>
-                    <div className="text-[10px] text-gray-600 mt-1">{kpis.hasFutureData ? 'actual + forecast' : 'actual'}</div>
-                  </div>
-                  <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
-                    <div className="text-xs text-gray-500 mb-1">Avg handle rate</div>
-                    <div className="text-2xl font-mono font-medium text-gray-300">
-                      {rangeRate !== null ? rangeRate.toFixed(1) : '—'}
-                    </div>
-                    <div className="text-[10px] text-gray-600 mt-1">tickets/agent/hr</div>
-                    {benchmarkRate !== null && (
-                      <div className="text-[10px] text-gray-600 mt-1">
-                        30-day avg · {benchmarkRate.toFixed(1)}
-                      </div>
-                    )}
-                  </div>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Inbound calls · {viewInfo.label}</div>
+                  <div className="text-2xl font-mono font-medium text-gray-300">{kpis ? kpis.calls.toLocaleString() : '—'}</div>
+                  <div className="text-[10px] text-gray-600 mt-1">{kpis?.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                 </div>
-              )}
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Answer rate · {viewInfo.label}</div>
+                  <div className={`text-2xl font-mono font-medium ${kpis?.answerRate !== null ? slaColor(kpis?.answerRate) : 'text-gray-600'}`}>
+                    {kpis?.answerRate !== null && kpis?.answerRate !== undefined ? `${kpis.answerRate}%` : '—'}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1">{kpis?.answerRate !== null && kpis?.answerRate !== undefined ? 'target: 95%' : 'no data yet'}</div>
+                </div>
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Tickets created · {viewInfo.label}</div>
+                  <div className="text-2xl font-mono font-medium text-gray-300">{kpis ? kpis.ticketsCreated.toLocaleString() : '—'}</div>
+                  <div className="text-[10px] text-gray-600 mt-1">{kpis?.hasFutureData ? 'actual + forecast' : 'actual'}</div>
+                </div>
+                <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
+                  <div className="text-xs text-gray-500 mb-1">Avg handle rate</div>
+                  <div className="text-2xl font-mono font-medium text-gray-300">
+                    {rangeRate !== null ? rangeRate.toFixed(1) : '—'}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1">tickets/agent/hr</div>
+                  {benchmarkRate !== null && (
+                    <div className="text-[10px] text-gray-600 mt-1">
+                      30-day avg · {benchmarkRate.toFixed(1)}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <TimelineView
                 agents={agents}
