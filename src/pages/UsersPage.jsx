@@ -29,6 +29,7 @@ function RoleDropdown({ value, onChange }) {
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
   const buttonRef = useRef(null)
+  const portalRef = useRef(null)
 
   useEffect(() => {
     if (!open || !buttonRef.current) return
@@ -49,9 +50,11 @@ function RoleDropdown({ value, onChange }) {
       width: rect.width,
     })
 
-    // Close on outside click
+    // Close on outside click (but not clicks inside portal)
     const handleClickOutside = (e) => {
-      if (buttonRef.current && !buttonRef.current.contains(e.target)) {
+      const isOutsideButton = buttonRef.current && !buttonRef.current.contains(e.target)
+      const isOutsidePortal = portalRef.current && !portalRef.current.contains(e.target)
+      if (isOutsideButton && isOutsidePortal) {
         setOpen(false)
       }
     }
@@ -75,6 +78,7 @@ function RoleDropdown({ value, onChange }) {
       {open &&
         createPortal(
           <div
+            ref={portalRef}
             className="fixed z-50 bg-[#141922] border border-[#2A3245] rounded-lg shadow-xl overflow-hidden"
             style={{
               top: `${position.top}px`,
@@ -110,6 +114,7 @@ function AgentDropdown({ value, agents, onChange }) {
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
   const buttonRef = useRef(null)
+  const portalRef = useRef(null)
   const selected = agents.find(a => a.id === value)
 
   useEffect(() => {
@@ -131,9 +136,11 @@ function AgentDropdown({ value, agents, onChange }) {
       width: rect.width,
     })
 
-    // Close on outside click
+    // Close on outside click (but not clicks inside portal)
     const handleClickOutside = (e) => {
-      if (buttonRef.current && !buttonRef.current.contains(e.target)) {
+      const isOutsideButton = buttonRef.current && !buttonRef.current.contains(e.target)
+      const isOutsidePortal = portalRef.current && !portalRef.current.contains(e.target)
+      if (isOutsideButton && isOutsidePortal) {
         setOpen(false)
       }
     }
@@ -164,6 +171,7 @@ function AgentDropdown({ value, agents, onChange }) {
       {open &&
         createPortal(
           <div
+            ref={portalRef}
             className="fixed z-50 bg-[#141922] border border-[#2A3245] rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto"
             style={{
               top: `${position.top}px`,
