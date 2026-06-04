@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import {
-  ChevronLeft, ChevronRight, ChevronDown, Copy,
+  ChevronLeft, ChevronRight, ChevronDown,
   Users, BarChart2, Calendar, LayoutGrid,
   GitBranch, TrendingUp, Clock, Target, Settings, LogOut,
 } from 'lucide-react'
@@ -329,16 +329,6 @@ export default function SchedulePage({ theme, toggleTheme }) {
             </button>
           )}
           <button
-            onClick={toggleTheme}
-            title={!sidebarOpen ? (theme === 'dark' ? 'Light mode' : 'Dark mode') : undefined}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E] w-full ${!sidebarOpen ? 'justify-center' : ''}`}
-          >
-            <span className="text-base leading-none">{theme === 'dark' ? '☀️' : '🌙'}</span>
-            {sidebarOpen && (
-              <span className="text-xs">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-            )}
-          </button>
-          <button
             onClick={signOut}
             title={!sidebarOpen ? 'Sign out' : undefined}
             className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-gray-500 hover:text-red-400 hover:bg-[#1A1F2E] w-full ${!sidebarOpen ? 'justify-center' : ''}`}
@@ -372,20 +362,15 @@ export default function SchedulePage({ theme, toggleTheme }) {
           {/* ── TIMELINE ── */}
           {activeView === 'timeline' && (
             <>
-              {/* Action buttons */}
-              <div className="flex items-center justify-end flex-wrap gap-3">
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  {saving && <span className="text-xs text-gray-500 font-mono">saving…</span>}
-                  {!saving && saveError && <span className="text-xs text-red-400 font-mono">save failed</span>}
-                  {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
-                  <button
-                    onClick={handleCopyLastWeek}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors"
-                  >
-                    <Copy size={13} /> Copy last week
-                  </button>
-                </div>
+              {/* Theme toggle header */}
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={toggleTheme}
+                  title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                  className="p-2 rounded-lg text-sm transition-colors text-gray-500 hover:text-gray-300 hover:bg-[#1A1F2E]"
+                >
+                  <span className="text-base">{theme === 'dark' ? '☀️' : '🌙'}</span>
+                </button>
               </div>
 
               {/* KPI cards */}
@@ -436,6 +421,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 handleRate={benchmarkRate}
                 userRole={role}
                 userAgentId={userAgentId}
+                onCopyLastWeek={handleCopyLastWeek}
+                copyMsg={copyMsg}
               />
             </>
           )}

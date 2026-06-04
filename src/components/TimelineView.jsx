@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Copy } from 'lucide-react'
 import {
   hLabel, getMondayOfWeek, toISODate,
   BASELINE_EMAIL, BASELINE_PHONE,
@@ -1604,6 +1604,8 @@ export default function TimelineView({
   handleRate,
   userRole,
   userAgentId,
+  onCopyLastWeek,
+  copyMsg,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
 
@@ -1741,7 +1743,7 @@ export default function TimelineView({
 
       {/* ── Toolbar ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-1">
 
           {/* View mode pills */}
           <div className="flex rounded-lg overflow-hidden border border-[#2A3245]">
@@ -1843,6 +1845,19 @@ export default function TimelineView({
                 style={{ colorScheme: 'dark' }}
               />
             </div>
+          )}
+        </div>
+
+        {/* Copy last week button — right side */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {copyMsg && <span className="text-xs text-emerald-400 font-mono">{copyMsg}</span>}
+          {onCopyLastWeek && (
+            <button
+              onClick={onCopyLastWeek}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1A1F2E] hover:bg-[#2A3245] text-gray-300 hover:text-white transition-colors"
+            >
+              <Copy size={13} /> Copy last week
+            </button>
           )}
         </div>
 
