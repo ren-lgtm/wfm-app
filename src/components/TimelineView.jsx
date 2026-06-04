@@ -896,7 +896,13 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   })()}
                   {/* Total worked hours for this agent/day */}
                   {(() => {
+                    if (agent.name === 'Allison') {
+                      console.log('[DayView] Allison slots:', slots, 'Object.values:', Object.values(slots))
+                    }
                     const worked = Object.values(slots).filter(a => a && a !== 'off' && a !== 'lunch').length
+                    if (agent.name === 'Allison') {
+                      console.log('[DayView] Allison worked count:', worked)
+                    }
                     return (
                       <td className="py-1 px-1 text-center border-l border-[#2A3245] text-[10px] font-mono text-gray-400 whitespace-nowrap">
                         {worked > 0 ? `${worked}h` : <span className="text-gray-700">—</span>}
