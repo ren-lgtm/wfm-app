@@ -1370,12 +1370,16 @@ function MonthView({ year, month, agents, schedule, monday, onSelectDay }) {
 
   function getCoverageForDate(date) {
     let emailAgents = 0, totalHours = 0
+    const scheduledAgents = []
     for (const agent of agents) {
       const slots = getSlotsForDate(schedule, agent.id, monday, date)
       let hrs = 0
       Object.values(slots).forEach(v => { if (v === 'email' || v === 'phone') hrs++ })
-      if (hrs > 0) emailAgents++
-      totalHours += hrs
+      if (hrs > 0) {
+        emailAgents++
+        totalHours += hrs
+        scheduledAgents.push({ agent, hours: hrs })
+      }
     }
     const di     = getDayOfWeekIdx(date)
     const needed = di >= 5 ? 2 : 4
@@ -1383,7 +1387,7 @@ function MonthView({ year, month, agents, schedule, monday, onSelectDay }) {
       : emailAgents >= needed ? 'ok'
       : emailAgents >= Math.ceil(needed * 0.6) ? 'warn'
       : 'critical'
-    return { emailAgents, totalHours, status }
+    return { emailAgents, totalHours, status, scheduledAgents }
   }
 
   const statusColor = {
@@ -1409,8 +1413,10 @@ function MonthView({ year, month, agents, schedule, monday, onSelectDay }) {
             const isCurrentMonth = date.getMonth() === month
             const isToday        = isoStr(date) === todayStr
             const isWeekend      = di >= 5
-            const { emailAgents, totalHours, status } = getCoverageForDate(date)
+            const { emailAgents, totalHours, status, scheduledAgents } = getCoverageForDate(date)
             const sc = statusColor[status]
+            const agentsToShow = scheduledAgents.slice(0, 5)
+            const moreCount = scheduledAgents.length > 5 ? scheduledAgents.length - 5 : 0
 
             return (
               <button
@@ -1436,9 +1442,22 @@ function MonthView({ year, month, agents, schedule, monday, onSelectDay }) {
                   )}
                 </div>
                 {isCurrentMonth && totalHours > 0 && (
-                  <div className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${sc.bar} ${sc.label}`}>
-                    {emailAgents} agents · {Math.round(totalHours)}h
-                  </div>
+                  <>
+                    <div className={`text-[9px] font-mono px-1.5 py-0.5 rounded mb-1.5 ${sc.bar} ${sc.label}`}>
+                      {emailAgents} agents · {Math.round(totalHours)}h
+                    </div>
+                    <div className="space-y-0.5">
+                      {agentsToShow.map(({ agent }) => (
+                        <div key={agent.id} className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: agent.color }} />
+                          <span className="text-[8px] text-gray-400 truncate">{agent.name.split(' ')[0]}</span>
+                        </div>
+                      ))}
+                      {moreCount > 0 && (
+                        <div className="text-[8px] text-gray-600">+{moreCount} more</div>
+                      )}
+                    </div>
+                  </>
                 )}
                 {isCurrentMonth && totalHours === 0 && (
                   <div className="text-[9px] text-gray-700">No schedule</div>

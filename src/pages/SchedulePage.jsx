@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown,
-  Users, BarChart2, Calendar, LayoutGrid,
+  Users, BarChart2, Calendar,
   GitBranch, TrendingUp, Clock, Target, Settings, LogOut,
 } from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
@@ -15,8 +15,6 @@ import { usePeriodKPIs } from '../hooks/usePeriodKPIs'
 import { useAvgHandleRate } from '../hooks/useAvgHandleRate'
 import { useAuth } from '../contexts/AuthContext'
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
 
 const NAV = [
@@ -26,7 +24,6 @@ const NAV = [
     icon: Calendar,
     children: [
       { id: 'timeline',  label: 'Timeline',    icon: GitBranch },
-      { id: 'multiweek', label: '4-Week View', icon: LayoutGrid },
     ],
   },
   {
@@ -46,69 +43,6 @@ const NAV = [
     children: null,
   },
 ]
-
-// ─── 4-Week View ─────────────────────────────────────────────────────────────
-
-function MultiWeekView({ agents, currentMonday, goToWeek, onOpenTimeline, forecast }) {
-  const weeks = Array.from({ length: 4 }, (_, i) => {
-    const mon = new Date(currentMonday)
-    mon.setDate(mon.getDate() + i * 7)
-    return mon
-  })
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-white">4-Week Overview</h2>
-        <p className="text-xs text-gray-500">Click any day to jump to that week</p>
-      </div>
-
-      {weeks.map((monday, wi) => (
-        <div key={wi} className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#2A3245] flex items-center justify-between">
-            <span className="text-xs font-medium text-white font-mono">{formatWeekLabel(monday)}</span>
-            <button
-              onClick={() => { goToWeek(monday); onOpenTimeline() }}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              Open week →
-            </button>
-          </div>
-
-          <div className="grid grid-cols-5 divide-x divide-[#2A3245]">
-            {WEEKDAYS.map(day => {
-              const dayDate = new Date(monday)
-              dayDate.setDate(dayDate.getDate() + WEEKDAYS.indexOf(day))
-              const dateNum = dayDate.getDate()
-              const month   = dayDate.toLocaleDateString('en-US', { month: 'short' })
-
-              return (
-                <button
-                  key={day}
-                  onClick={() => { goToWeek(monday); onOpenTimeline() }}
-                  className="p-3 text-left hover:bg-[#2A3245]/40 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-medium text-gray-400">{day}</span>
-                    <span className="text-[10px] text-gray-600 font-mono">{month} {dateNum}</span>
-                  </div>
-                  <div className="space-y-1">
-                    {agents.slice(0, 5).map(agent => (
-                      <div key={agent.id} className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: agent.color }} />
-                        <span className="text-[9px] text-gray-500 truncate">{agent.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 // ─── Main app ─────────────────────────────────────────────────────────────────
 
@@ -425,17 +359,6 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 copyMsg={copyMsg}
               />
             </>
-          )}
-
-          {/* ── 4-WEEK VIEW ── */}
-          {activeView === 'multiweek' && (
-            <MultiWeekView
-              agents={agents}
-              currentMonday={currentMonday}
-              goToWeek={goToWeek}
-              onOpenTimeline={() => setActiveView('timeline')}
-              forecast={forecast}
-            />
           )}
 
           {/* ── FORECAST SECTIONS ── */}
