@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { UserPlus, X, ChevronDown, Check, Mail, Shield, Star, User, Plus, Loader, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -57,10 +58,44 @@ function RoleDropdown({ value, onChange }) {
 
 function AgentDropdown({ value, agents, onChange }) {
   const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+  const buttonRef = useRef(null)
   const selected = agents.find(a => a.id === value)
+
+  useEffect(() => {
+    if (!open || !buttonRef.current) return
+
+    const rect = buttonRef.current.getBoundingClientRect()
+    const dropdownHeight = Math.min(200, (agents.length + 1) * 40)
+    const viewportHeight = window.innerHeight
+    const spaceBelow = viewportHeight - rect.bottom
+    const spaceAbove = rect.top
+
+    // Decide if dropdown should go above or below
+    const positionBelow = spaceBelow > dropdownHeight || spaceAbove < dropdownHeight
+    const top = positionBelow ? rect.bottom + 8 : rect.top - dropdownHeight - 8
+
+    setPosition({
+      top,
+      left: rect.left,
+      width: rect.width,
+    })
+
+    // Close on outside click
+    const handleClickOutside = (e) => {
+      if (buttonRef.current && !buttonRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open, agents.length])
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#2A3245] bg-[#0C0F14] text-sm text-gray-200 hover:border-[#3D4A6B] transition-colors min-w-[120px]"
@@ -75,32 +110,44 @@ function AgentDropdown({ value, agents, onChange }) {
         )}
         <ChevronDown size={13} className="text-gray-500 shrink-0" />
       </button>
-      {open && (
-        <div className="absolute bottom-full mb-1 left-0 z-20 min-w-full bg-[#141922] border border-[#2A3245] rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto">
-          <button
-            type="button"
-            onClick={() => { onChange(null); setOpen(false) }}
-            className="w-full flex items-center px-3 py-2 text-sm text-gray-500 hover:bg-[#2A3245] transition-colors"
+
+      {open &&
+        createPortal(
+          <div
+            className="fixed z-50 bg-[#141922] border border-[#2A3245] rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto"
+            style={{
+              top: `${position.top}px`,
+              left: `${position.left}px`,
+              width: `${position.width}px`,
+              minWidth: '120px',
+            }}
           >
-            None
-          </button>
-          {agents.map(a => (
             <button
-              key={a.id}
               type="button"
-              onClick={() => { onChange(a.id); setOpen(false) }}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-[#2A3245] hover:text-white transition-colors"
+              onClick={() => { onChange(null); setOpen(false) }}
+              className="w-full flex items-center px-3 py-2 text-sm text-gray-500 hover:bg-[#2A3245] transition-colors"
             >
-              <span className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: a.color }} />
-                {a.name}
-              </span>
-              {a.id === value && <Check size={12} className="text-blue-400" />}
+              None
             </button>
-          ))}
-        </div>
-      )}
-    </div>
+            {agents.map(a => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => { onChange(a.id); setOpen(false) }}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-[#2A3245] hover:text-white transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: a.color }} />
+                  {a.name}
+                </span>
+                {a.id === value && <Check size={12} className="text-blue-400" />}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )
+      }
+    </>
   )
 }
 
