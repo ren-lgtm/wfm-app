@@ -22,6 +22,12 @@ export function AuthProvider({ children }) {
       .maybeSingle()
     setRole(data?.role ?? null)
     setAgentId(data?.agent_id ?? null)
+
+    // Persist the Google display name into app_users so it shows in the Users page
+    const googleName = session.user.user_metadata?.full_name
+    if (data && googleName) {
+      supabase.from('app_users').update({ name: googleName }).eq('email', session.user.email)
+    }
   }
 
   useEffect(() => {
