@@ -200,27 +200,25 @@ export function getDayOfWeek(date) {
 }
 
 export function getMondayOfWeek(date) {
-  // Get current date in PT timezone to ensure all users see the same week_start
-  // regardless of their local timezone
-  const ptDateStr = new Date(date).toLocaleDateString('en-US', {
+  // Always compute "today" in PT to get a consistent week for all users
+  const ptDateStr = new Date(date || Date.now()).toLocaleDateString('en-US', {
     timeZone: 'America/Los_Angeles',
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit'
+    day: '2-digit',
   })
-
-  // Parse PT date string (format: MM/DD/YYYY)
-  const [month, day, year] = ptDateStr.split('/')
-  const ptDate = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
-
-  // Calculate Monday from PT date
-  const dayOfWeek = ptDate.getDay()
-  const diff = ptDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1)
-  ptDate.setDate(diff)
-  ptDate.setHours(0, 0, 0, 0)
-
-  // Return as UTC date (toISODate will convert to YYYY-MM-DD string)
-  return ptDate
+  // ptDateStr is "MM/DD/YYYY"
+  const [month, day, year] = ptDateStr.split('/').map(Number)
+  // Build a local date using PT's Y/M/D to avoid any further tz shifts
+  const ptDate = new Date(year, month - 1, day)
+  const dayOfWeek = ptDate.getDay() // 0=Sun, 1=Mon...
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // shift to Monday
+  const monday = new Date(ptDate)
+  monday.setDate(ptDate.getDate() + diff)
+  const y = monday.getFullYear()
+  const m = String(monday.getMonth() + 1).padStart(2, '0')
+  const d = String(monday.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 export function formatWeekLabel(monday) {

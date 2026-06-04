@@ -63,6 +63,11 @@ export default function SchedulePage({ theme, toggleTheme }) {
     shiftTypes, addShiftType, updateShiftType, deleteShiftType, reorderShiftType,
   } = useShiftTypes()
 
+  // Debug: log PT-anchored weekStart
+  useEffect(() => {
+    console.log('[getMondayOfWeek] PT-anchored weekStart:', currentMonday)
+  }, [currentMonday])
+
   // Special sentinel from SettingsPage reset button
   const handleShiftTypeAdd = (form) => {
     if (form === '__reset__') {
