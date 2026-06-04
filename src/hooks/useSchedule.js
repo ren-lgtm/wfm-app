@@ -66,6 +66,8 @@ export function useSchedule({ userId } = {}) {
       .select('*, schedule_slots(*)')
       .eq('week_start', weekStart)
 
+    console.log('[loadWeek] weekStart:', weekStart, 'schedules:', schedules, 'error:', error)
+
     if (error) {
       console.error('[loadWeek] Supabase error:', error)
       setLoadError(`Failed to load schedule: ${error.message}`)
@@ -143,7 +145,13 @@ export function useSchedule({ userId } = {}) {
     setMonthSchedule(ms)
   }, [])
 
-  useEffect(() => { if (userId) loadWeek(currentMonday) }, [currentMonday, loadWeek, userId])
+  // Load week schedule when userId is available (session confirmed) and currentMonday changes
+  useEffect(() => {
+    if (userId) {
+      console.log('[useSchedule] loadWeek triggered - userId:', userId, 'currentMonday:', currentMonday)
+      loadWeek(currentMonday)
+    }
+  }, [currentMonday, loadWeek, userId])
 
   // Save a single slot change
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
