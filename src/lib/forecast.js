@@ -200,12 +200,27 @@ export function getDayOfWeek(date) {
 }
 
 export function getMondayOfWeek(date) {
-  const d = new Date(date)
-  const day = d.getDay()
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-  d.setDate(diff)
-  d.setHours(0, 0, 0, 0)
-  return d
+  // Get current date in PT timezone to ensure all users see the same week_start
+  // regardless of their local timezone
+  const ptDateStr = new Date(date).toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+
+  // Parse PT date string (format: MM/DD/YYYY)
+  const [month, day, year] = ptDateStr.split('/')
+  const ptDate = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
+
+  // Calculate Monday from PT date
+  const dayOfWeek = ptDate.getDay()
+  const diff = ptDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1)
+  ptDate.setDate(diff)
+  ptDate.setHours(0, 0, 0, 0)
+
+  // Return as UTC date (toISODate will convert to YYYY-MM-DD string)
+  return ptDate
 }
 
 export function formatWeekLabel(monday) {
