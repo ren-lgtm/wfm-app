@@ -49,8 +49,8 @@ export function CustomRangePicker({ startDate, endDate, onApply, onClose }) {
   const canApply = tempStart && tempEnd && tempStart <= tempEnd
 
   return (
-    <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4 shadow-xl">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4 shadow-xl" style={{ minWidth: '580px' }}>
+      <div className="grid grid-cols-2 gap-6">
         <MonthCalendar
           month={firstMonth}
           tempStart={tempStart}
@@ -69,19 +69,19 @@ export function CustomRangePicker({ startDate, endDate, onApply, onClose }) {
         />
       </div>
 
-      <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#2A3245]">
-        <div className="text-xs text-gray-500">
+      <div className="mt-4 pt-4 border-t border-[#2A3245] space-y-3">
+        <div className="text-xs text-gray-500 text-left">
           {tempStart && tempEnd ? (
-            <span>
+            <span className="font-mono">
               {tempStart.toLocaleDateString()} – {tempEnd.toLocaleDateString()}
             </span>
           ) : tempStart ? (
-            <span>Start: {tempStart.toLocaleDateString()}</span>
+            <span className="font-mono">Start: {tempStart.toLocaleDateString()}</span>
           ) : (
             <span>Select start and end date</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <button
             onClick={onClose}
             className="px-3 py-1.5 text-xs rounded-lg bg-[#0C0F14] hover:bg-[#1A1F2E] text-gray-400 hover:text-gray-300 transition-colors"
@@ -116,34 +116,34 @@ function MonthCalendar({ month, tempStart, tempEnd, isSelectingStart, onDateClic
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-semibold text-white">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-white flex-1">
           {months[month.getMonth()]} {month.getFullYear()}
         </h3>
-        <div className="flex gap-1">
+        <div className="flex gap-0.5">
           {onPrevMonth && (
             <button
               onClick={onPrevMonth}
-              className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-gray-300 transition-colors"
+              className="p-1.5 rounded hover:bg-[#1A1F2E] text-gray-400 hover:text-gray-300 transition-colors"
             >
-              <ChevronLeft size={12} />
+              <ChevronLeft size={14} />
             </button>
           )}
           {onNextMonth && (
             <button
               onClick={onNextMonth}
-              className="p-1 rounded-lg hover:bg-[#1A1F2E] text-gray-400 hover:text-gray-300 transition-colors"
+              className="p-1.5 rounded hover:bg-[#1A1F2E] text-gray-400 hover:text-gray-300 transition-colors"
             >
-              <ChevronRight size={12} />
+              <ChevronRight size={14} />
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-[9px] text-gray-600 font-semibold">
+      <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 font-semibold mb-1">
         {dayLabels.map(day => (
-          <div key={day} className="text-center py-1">
+          <div key={day} className="text-center h-7 flex items-center justify-center">
             {day}
           </div>
         ))}
@@ -152,22 +152,21 @@ function MonthCalendar({ month, tempStart, tempEnd, isSelectingStart, onDateClic
       <div className="grid grid-cols-7 gap-1">
         {allDays.map((day, i) => {
           if (!day) {
-            return <div key={`empty-${i}`} />
+            return <div key={`empty-${i}`} className="h-8" />
           }
 
           const isStart = tempStart && isSameDay(day, tempStart)
           const isEnd = tempEnd && isSameDay(day, tempEnd)
           const isInRange = tempStart && tempEnd && isWithinInterval(day, { start: tempStart, end: tempEnd })
-          const isCurrentSelection = isSelectingStart ? isStart : isEnd
 
-          let bgColor = 'bg-transparent'
+          let bgColor = 'hover:bg-[#2A3245]'
           let textColor = 'text-gray-400'
 
           if (isStart || isEnd) {
-            bgColor = 'bg-blue-600'
+            bgColor = 'bg-blue-600 hover:bg-blue-600'
             textColor = 'text-white font-semibold'
           } else if (isInRange) {
-            bgColor = 'bg-blue-900/40'
+            bgColor = 'bg-blue-900/30 hover:bg-blue-900/50'
             textColor = 'text-blue-200'
           }
 
@@ -175,7 +174,8 @@ function MonthCalendar({ month, tempStart, tempEnd, isSelectingStart, onDateClic
             <button
               key={day.toISOString()}
               onClick={() => onDateClick(day)}
-              className={`py-1.5 rounded text-xs font-medium ${bgColor} ${textColor} hover:bg-[#2A3245] transition-colors`}
+              className={`h-8 rounded text-xs font-medium ${bgColor} ${textColor} transition-colors flex items-center justify-center`}
+              style={{ minWidth: '32px' }}
             >
               {day.getDate()}
             </button>

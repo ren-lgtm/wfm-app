@@ -307,7 +307,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 </button>
               </div>
 
-              {/* KPI cards */}
+              {/* KPI cards — always show when in timeline view */}
               {kpis && (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
