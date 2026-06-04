@@ -76,7 +76,7 @@ function AgentDropdown({ value, agents, onChange }) {
         <ChevronDown size={13} className="text-gray-500 shrink-0" />
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-20 min-w-full bg-[#141922] border border-[#2A3245] rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full mb-1 left-0 z-20 min-w-full bg-[#141922] border border-[#2A3245] rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto">
           <button
             type="button"
             onClick={() => { onChange(null); setOpen(false) }}
