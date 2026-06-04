@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, X, Copy } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Copy, Calendar } from 'lucide-react'
 import {
   hLabel, getMondayOfWeek, toISODate,
   BASELINE_EMAIL, BASELINE_PHONE,
@@ -9,6 +9,7 @@ import {
   PHONE_START, PHONE_END,
 } from '../lib/forecast'
 import { supabase } from '../lib/supabase'
+import { CustomRangePicker } from './CustomRangePicker'
 
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 
@@ -1633,6 +1634,21 @@ export default function TimelineView({
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [customStart,  setCustomStart]  = useState('')
   const [customEnd,    setCustomEnd]    = useState('')
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const datePickerRef = useRef(null)
+
+  // Close date picker on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target)) {
+        setShowDatePicker(false)
+      }
+    }
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDatePicker])
 
   // Live vs mock agents
   const hasLiveData = liveAgents && liveAgents.length > 0
@@ -1844,25 +1860,37 @@ export default function TimelineView({
             </div>
           )}
 
-          {/* Custom range — proper date pickers */}
+          {/* Custom range picker dropdown */}
           {viewMode === 'custom' && (
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={customStart}
-                onChange={e => setCustomStart(e.target.value)}
-                className="bg-[#0C0F14] border border-[#2A3245] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono cursor-pointer"
-                style={{ colorScheme: 'dark' }}
-              />
-              <span className="text-gray-500 text-xs">to</span>
-              <input
-                type="date"
-                value={customEnd}
-                min={customStart}
-                onChange={e => setCustomEnd(e.target.value)}
-                className="bg-[#0C0F14] border border-[#2A3245] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono cursor-pointer"
-                style={{ colorScheme: 'dark' }}
-              />
+            <div className="relative" ref={datePickerRef}>
+              <button
+                onClick={() => setShowDatePicker(!showDatePicker)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-[#2A3245] bg-[#0C0F14] text-gray-300 hover:text-white hover:bg-[#1A1F2E] transition-colors min-w-[220px]"
+              >
+                <Calendar size={13} />
+                {customStart && customEnd ? (
+                  <span className="font-mono">{customStart} – {customEnd}</span>
+                ) : (
+                  <span>Select dates</span>
+                )}
+              </button>
+
+              {/* Date picker dropdown */}
+              {showDatePicker && (
+                <div className="absolute top-full left-0 mt-2 z-20">
+                  <CustomRangePicker
+                    startDate={customStart}
+                    endDate={customEnd}
+                    onApply={(start, end) => {
+                      const startStr = start.toISOString().split('T')[0]
+                      const endStr = end.toISOString().split('T')[0]
+                      setCustomStart(startStr)
+                      setCustomEnd(endStr)
+                    }}
+                    onClose={() => setShowDatePicker(false)}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
