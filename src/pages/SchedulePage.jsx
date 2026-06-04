@@ -316,10 +316,10 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Answer rate · {viewInfo.label}</div>
-                  <div className={`text-2xl font-mono font-medium ${kpis?.answerRate !== null ? slaColor(kpis?.answerRate) : 'text-gray-600'}`}>
-                    {kpis?.answerRate !== null && kpis?.answerRate !== undefined ? `${kpis.answerRate}%` : '—'}
+                  <div className={`text-2xl font-mono font-medium ${kpis && kpis.answerRate !== null ? slaColor(kpis.answerRate) : 'text-gray-600'}`}>
+                    {kpis && kpis.answerRate !== null ? `${kpis.answerRate}%` : '—'}
                   </div>
-                  <div className="text-[10px] text-gray-600 mt-1">{kpis?.answerRate !== null && kpis?.answerRate !== undefined ? 'target: 95%' : 'no data yet'}</div>
+                  <div className="text-[10px] text-gray-600 mt-1">{kpis && kpis.answerRate !== null ? 'target: 95%' : 'no data yet'}</div>
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Tickets created · {viewInfo.label}</div>
