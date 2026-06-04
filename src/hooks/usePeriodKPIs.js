@@ -22,8 +22,15 @@ export function usePeriodKPIs({ startDate, endDate, phoneForecast, emailForecast
       return
     }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // Compute "today" in PT timezone to stay consistent across all user timezones
+    const ptTodayStr = new Date().toLocaleDateString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+    const [ptMonth, ptDay, ptYear] = ptTodayStr.split('/')
+    const today = new Date(Number(ptYear), Number(ptMonth) - 1, Number(ptDay), 0, 0, 0, 0)
 
     let cancelled = false
     setLoading(true)
