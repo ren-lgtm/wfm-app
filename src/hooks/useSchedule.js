@@ -70,9 +70,15 @@ export function useSchedule({ userId } = {}) {
 
     if (error) {
       console.error('[loadWeek] Supabase error:', error)
+      console.error('[loadWeek] Error code:', error.code, 'message:', error.message, 'details:', error.details)
       setLoadError(`Failed to load schedule: ${error.message}`)
       setLoading(false)
       return
+    }
+
+    // Check if query returned empty — might indicate RLS policy blocking access
+    if (!schedules || schedules.length === 0) {
+      console.warn('[loadWeek] No schedules returned for week', weekStart, '— this could indicate RLS policy is blocking access for non-admin users')
     }
 
     // Build weekSchedule: { agentId: { day: { hour: activity } } }

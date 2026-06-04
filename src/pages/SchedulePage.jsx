@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown,
   Users, BarChart2, Calendar,
@@ -48,6 +48,11 @@ const NAV = [
 
 export default function SchedulePage({ theme, toggleTheme }) {
   const { role, agentId: userAgentId, user, signOut } = useAuth()
+
+  // Debug: log auth status
+  useEffect(() => {
+    console.log('[SchedulePage] Auth status - user:', user?.email, 'role:', role, 'agentId:', userAgentId)
+  }, [user, role, userAgentId])
 
   const {
     agents, currentMonday, weekSchedule, monthSchedule, forecast, slaData, saving, saveError, loadError,
