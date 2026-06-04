@@ -6,6 +6,7 @@ export function useSchedule({ userId } = {}) {
   const [agents, setAgents] = useState([])
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()))
   const [weekSchedule, setWeekSchedule] = useState({}) // { agentId: { Mon: { hour: activity } } }
+  const [monthSchedule, setMonthSchedule] = useState({}) // { agentId: { dateStr: { hour: activity } } } for entire month
   const [forecast, setForecast] = useState({ phoneForecast: {}, emailForecast: {} })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -86,6 +87,60 @@ export function useSchedule({ userId } = {}) {
     }
     setWeekSchedule(ws)
     setLoading(false)
+  }, [])
+
+  // Load entire month schedule — for month view which needs all weeks in the month
+  const loadMonth = useCallback(async (year, month) => {
+    // Calculate first and last Monday of the month
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+
+    // Find first Monday >= firstDay
+    const firstMonday = new Date(firstDay)
+    const dow = firstMonday.getDay()
+    firstMonday.setDate(firstMonday.getDate() + (dow === 0 ? 1 : (dow === 1 ? 0 : (8 - dow))))
+
+    // Find last Monday <= lastDay
+    const lastMonday = new Date(lastDay)
+    const lastDow = lastMonday.getDay()
+    lastMonday.setDate(lastMonday.getDate() - (lastDow === 0 ? 6 : (lastDow === 1 ? 0 : (lastDow - 1))))
+
+    const firstMondayStr = toISODate(firstMonday)
+    const lastMondayStr = toISODate(lastMonday)
+
+    const { data: schedules, error } = await supabase
+      .from('schedules')
+      .select('*, schedule_slots(*)')
+      .gte('week_start', firstMondayStr)
+      .lte('week_start', lastMondayStr)
+
+    if (error) {
+      console.error('[loadMonth] Supabase error:', error)
+      return
+    }
+
+    // Build monthSchedule: { agentId: { dateStr: { hour: activity } } }
+    const ms = {}
+    if (schedules) {
+      for (const sched of schedules) {
+        if (!ms[sched.agent_id]) ms[sched.agent_id] = {}
+
+        const dayObj = sched.is_off ? { off: true } : {}
+        for (const slot of sched.schedule_slots || []) {
+          dayObj[slot.hour] = slot.activity
+        }
+
+        // Calculate date from week_start and day_of_week
+        const weekStart = new Date(sched.week_start)
+        const dayIdx = DAYS.indexOf(sched.day_of_week)
+        const dateObj = new Date(weekStart)
+        dateObj.setDate(dateObj.getDate() + dayIdx)
+        const dateStr = toISODate(dateObj)
+
+        ms[sched.agent_id][dateStr] = dayObj
+      }
+    }
+    setMonthSchedule(ms)
   }, [])
 
   useEffect(() => { if (userId) loadWeek(currentMonday) }, [currentMonday, loadWeek, userId])
@@ -318,10 +373,11 @@ export function useSchedule({ userId } = {}) {
   }, [weekSchedule])
 
   return {
-    agents, currentMonday, weekSchedule, forecast, slaData, loading, saving,
+    agents, currentMonday, weekSchedule, monthSchedule, forecast, slaData, loading, saving,
     saveError, loadError,
     dayNotes, updateDayNote,
     updateSlot, markOff, unmarkOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
     goToWeek, goNextWeek, goPrevWeek, getSlots, getAgentWeekHours,
+    loadMonth,
   }
 }

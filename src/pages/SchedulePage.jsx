@@ -50,8 +50,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const { role, agentId: userAgentId, user, signOut } = useAuth()
 
   const {
-    agents, currentMonday, weekSchedule, forecast, slaData, saving, saveError, loadError,
-    copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot, addAgent,
+    agents, currentMonday, weekSchedule, monthSchedule, forecast, slaData, saving, saveError, loadError,
+    copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot, addAgent, loadMonth,
   } = useSchedule({ userId: user?.id })
 
   const {
@@ -343,6 +343,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
               <TimelineView
                 agents={agents}
                 weekSchedule={weekSchedule}
+                monthSchedule={monthSchedule}
                 currentMonday={currentMonday}
                 phoneForecast={forecast.phoneForecast}
                 emailForecast={forecast.emailForecast}
@@ -355,6 +356,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 userAgentId={userAgentId}
                 onCopyLastWeek={handleCopyLastWeek}
                 copyMsg={copyMsg}
+                loadMonth={loadMonth}
               />
             </>
           )}

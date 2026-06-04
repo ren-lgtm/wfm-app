@@ -1353,7 +1353,7 @@ function WeekView({ monday, agents, schedule }) {
 
 // ─── Month View ───────────────────────────────────────────────────────────────
 
-function MonthView({ year, month, agents, schedule, monday, onSelectDay }) {
+function MonthView({ year, month, agents, schedule, monthSchedule, monday, onSelectDay }) {
   const firstDay  = new Date(year, month, 1)
   const lastDay   = new Date(year, month + 1, 0)
   const startDow  = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
@@ -1369,11 +1369,17 @@ function MonthView({ year, month, agents, schedule, monday, onSelectDay }) {
 
   const todayStr = isoStr(new Date())
 
+  // Helper to get slots from monthSchedule (keyed by date string)
+  function getSlotsForMonthDate(agentId, date) {
+    const dateStr = isoStr(date)
+    return monthSchedule?.[agentId]?.[dateStr] || {}
+  }
+
   function getCoverageForDate(date) {
     let emailAgents = 0, totalHours = 0
     const scheduledAgents = []
     for (const agent of agents) {
-      const slots = getSlotsForDate(schedule, agent.id, monday, date)
+      const slots = monthSchedule ? getSlotsForMonthDate(agent.id, date) : getSlotsForDate(schedule, agent.id, monday, date)
       let hrs = 0
       Object.values(slots).forEach(v => { if (v === 'email' || v === 'phone') hrs++ })
       if (hrs > 0) {
@@ -1614,6 +1620,7 @@ function CustomRangeView({ startDate, endDate, agents, schedule, monday, onSelec
 export default function TimelineView({
   agents: liveAgents,
   weekSchedule: liveSchedule,
+  monthSchedule: liveMonthSchedule,
   currentMonday: liveMonday,
   phoneForecast: livePF,
   emailForecast: liveEF,
@@ -1626,6 +1633,7 @@ export default function TimelineView({
   userAgentId,
   onCopyLastWeek,
   copyMsg,
+  loadMonth,
 }) {
   const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
 
@@ -1703,6 +1711,15 @@ export default function TimelineView({
   }, [monthOffset, todayDate])
 
   const weekMonday = useMemo(() => getMondayOfWeek(selectedDate), [selectedDate])
+
+  // Load month schedule when month view is displayed
+  useEffect(() => {
+    if (viewMode === 'month' && loadMonth) {
+      const yr = monthDate.getFullYear()
+      const mo = monthDate.getMonth()
+      loadMonth(yr, mo)
+    }
+  }, [viewMode, monthDate, loadMonth])
 
   // Report the effective date range to parent for KPI computation
   useEffect(() => {
@@ -1946,6 +1963,7 @@ export default function TimelineView({
           month={monthDate.getMonth()}
           agents={agents}
           schedule={schedule}
+          monthSchedule={liveMonthSchedule}
           monday={monday}
           onSelectDay={handleMonthDayClick}
         />
