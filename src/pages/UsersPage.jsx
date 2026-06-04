@@ -87,7 +87,11 @@ function RoleDropdown({ value, onChange }) {
               <button
                 key={r}
                 type="button"
-                onClick={() => { onChange(r); setOpen(false) }}
+                onClick={() => {
+                  console.log('[RoleDropdown] Clicked role:', r, 'current value:', value)
+                  onChange(r)
+                  setOpen(false)
+                }}
                 className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-300 hover:bg-[#2A3245] hover:text-white transition-colors"
               >
                 <RoleBadge role={r} />
@@ -202,6 +206,11 @@ function EditRow({ user, agents, onSave, onCancel }) {
   const [role,    setRole]    = useState(user.role)
   const [agentId, setAgentId] = useState(user.agent_id ?? null)
   const [saving,  setSaving]  = useState(false)
+
+  // Debug: log role changes
+  useEffect(() => {
+    console.log('[EditRow] role state changed to:', role)
+  }, [role])
 
   const handleSave = async () => {
     setSaving(true)
