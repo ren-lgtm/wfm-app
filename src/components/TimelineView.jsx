@@ -1882,10 +1882,9 @@ export default function TimelineView({
                     startDate={customStart}
                     endDate={customEnd}
                     onApply={(start, end) => {
-                      const startStr = start.toISOString().split('T')[0]
-                      const endStr = end.toISOString().split('T')[0]
-                      setCustomStart(startStr)
-                      setCustomEnd(endStr)
+                      const formatDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                      setCustomStart(formatDateStr(start))
+                      setCustomEnd(formatDateStr(end))
                     }}
                     onClose={() => setShowDatePicker(false)}
                   />

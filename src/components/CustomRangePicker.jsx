@@ -3,12 +3,19 @@ import { addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isWith
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
 
 export function CustomRangePicker({ startDate, endDate, onApply, onClose }) {
-  const [tempStart, setTempStart] = useState(startDate ? new Date(startDate) : null)
-  const [tempEnd, setTempEnd] = useState(endDate ? new Date(endDate) : null)
+  // Parse date strings to local dates (avoid UTC shift)
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return null
+    const [y, m, d] = dateStr.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+
+  const [tempStart, setTempStart] = useState(parseLocalDate(startDate))
+  const [tempEnd, setTempEnd] = useState(parseLocalDate(endDate))
   const [firstMonth, setFirstMonth] = useState(() => {
-    if (startDate) {
-      const d = new Date(startDate)
-      return new Date(d.getFullYear(), d.getMonth(), 1)
+    const start = parseLocalDate(startDate)
+    if (start) {
+      return new Date(start.getFullYear(), start.getMonth(), 1)
     }
     return new Date()
   })
