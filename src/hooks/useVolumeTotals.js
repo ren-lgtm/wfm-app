@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { PHONE_START, PHONE_END, WORK_START, WORK_END } from '../lib/forecast'
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const ALL_HOURS = Array.from({ length: 24 }, (_, i) => i)  // [0,1,2,...,23]
 
 // Convert YYYY-MM-DD string to Date object using Date.UTC (no timezone shift)
 function parseYMDString(yyyymmdd) {
@@ -50,8 +51,8 @@ export function useVolumeTotals({
   endDate,          // YYYY-MM-DD string
   phoneForecast,    // { [dow]: { [hour]: count } }
   emailForecast,    // { [dow]: { [hour]: count } }
-  phoneHours = Array.from({ length: 24 }, (_, i) => i),
-  emailHours = Array.from({ length: 24 }, (_, i) => i)
+  phoneHours = ALL_HOURS,
+  emailHours = ALL_HOURS
 }) {
   console.log('[useVolumeTotals] called with:', { startDate, endDate, startDateType: typeof startDate, endDateType: typeof endDate, phoneForecast: !!phoneForecast, emailForecast: !!emailForecast })
 
