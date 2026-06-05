@@ -86,8 +86,15 @@ const GAP_STATUS = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function addDays(date, n) {
-  const d = new Date(date); d.setDate(d.getDate() + n); return d
+function addDays(dateStr, days) {
+  // dateStr is a YYYY-MM-DD string (PT-anchored). Never parse through new Date(string).
+  // Instead, parse components and use Date.UTC for timezone-safe arithmetic.
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const result = new Date(Date.UTC(y, m - 1, d + days))
+  const ry = result.getUTCFullYear()
+  const rm = String(result.getUTCMonth() + 1).padStart(2, '0')
+  const rd = String(result.getUTCDate()).padStart(2, '0')
+  return `${ry}-${rm}-${rd}`  // return PT-anchored YYYY-MM-DD string
 }
 function formatDate(date, opts) {
   return new Date(date).toLocaleDateString('en-US', opts)
@@ -1656,10 +1663,17 @@ export default function TimelineView({
   copyMsg,
   loadMonth,
 }) {
-  const todayDate = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
+  const todayPT = useMemo(() => {
+    const ptToday = new Date().toLocaleDateString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    })
+    const [m, d, y] = ptToday.split('/')
+    return `${y}-${m}-${d}`  // YYYY-MM-DD PT-anchored string
+  }, [])
 
   const [viewMode,     setViewMode]     = useState('day')
-  const [selectedDate, setSelectedDate] = useState(todayDate)
+  const [selectedDate, setSelectedDate] = useState(todayPT)
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [customStart,  setCustomStart]  = useState('')
   const [customEnd,    setCustomEnd]    = useState('')
@@ -1702,14 +1716,13 @@ export default function TimelineView({
     }
   }, [selectedDate, liveMonday])
 
-  // Schedule (mock or live)
-  const mockSchedule = useMemo(() => buildMockSchedule(), [])
+  // Schedule (live only, null while loading to prevent mock data flash)
   const schedule = useMemo(() => {
-    if (!hasLiveData) return mockSchedule
+    if (!hasLiveData) return null  // Don't show mock data — wait for real data
     const hasData = Object.values(liveSchedule || {}).some(aw =>
       Object.values(aw || {}).some(ds => Object.keys(ds || {}).length > 0)
     )
-    if (!hasData) return mockSchedule
+    if (!hasData) return null  // No data yet — wait rather than showing placeholder
     const converted = {}
     for (const agent of agents) {
       converted[agent.id] = {}
@@ -1718,7 +1731,7 @@ export default function TimelineView({
       })
     }
     return converted
-  }, [hasLiveData, liveSchedule, mockSchedule, agents])
+  }, [hasLiveData, liveSchedule, agents])
 
   // Forecast — use live if available, else baseline
   const phoneForecast = useMemo(() => livePF && Object.keys(livePF).length > 0 ? livePF : BASELINE_PHONE, [livePF])
@@ -1954,52 +1967,61 @@ export default function TimelineView({
       </div>
 
       {/* ── View content ── */}
-      {viewMode === 'day' && (
-        <DayView
-          date={selectedDate}
-          agents={agents}
-          schedule={schedule}
-          monday={monday}
-          phoneForecast={phoneForecast}
-          emailForecast={emailForecast}
-          updateSlot={updateSlot}
-          shiftTypes={shiftTypes}
-          handleRate={handleRate}
-          userRole={userRole}
-          userAgentId={userAgentId}
-        />
-      )}
+      {!schedule && hasLiveData ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-12">
+          <div className="text-sm text-gray-400">Loading schedule…</div>
+          <div className="w-8 h-8 border-2 border-gray-700 border-t-blue-500 rounded-full animate-spin" />
+        </div>
+      ) : schedule ? (
+        <>
+          {viewMode === 'day' && (
+            <DayView
+              date={selectedDate}
+              agents={agents}
+              schedule={schedule}
+              monday={monday}
+              phoneForecast={phoneForecast}
+              emailForecast={emailForecast}
+              updateSlot={updateSlot}
+              shiftTypes={shiftTypes}
+              handleRate={handleRate}
+              userRole={userRole}
+              userAgentId={userAgentId}
+            />
+          )}
 
-      {viewMode === 'week' && (
-        <WeekView
-          monday={weekMonday}
-          agents={agents}
-          schedule={schedule}
-        />
-      )}
+          {viewMode === 'week' && (
+            <WeekView
+              monday={weekMonday}
+              agents={agents}
+              schedule={schedule}
+            />
+          )}
 
-      {viewMode === 'month' && (
-        <MonthView
-          year={monthDate.getFullYear()}
-          month={monthDate.getMonth()}
-          agents={agents}
-          schedule={schedule}
-          monthSchedule={liveMonthSchedule}
-          monday={monday}
-          onSelectDay={handleMonthDayClick}
-        />
-      )}
+          {viewMode === 'month' && (
+            <MonthView
+              year={monthDate.getFullYear()}
+              month={monthDate.getMonth()}
+              agents={agents}
+              schedule={schedule}
+              monthSchedule={liveMonthSchedule}
+              monday={monday}
+              onSelectDay={handleMonthDayClick}
+            />
+          )}
 
-      {viewMode === 'custom' && (
-        <CustomRangeView
-          startDate={customStart}
-          endDate={customEnd}
-          agents={agents}
-          schedule={schedule}
-          monday={monday}
-          onSelectDay={handleCustomDayClick}
-        />
-      )}
+          {viewMode === 'custom' && (
+            <CustomRangeView
+              startDate={customStart}
+              endDate={customEnd}
+              agents={agents}
+              schedule={schedule}
+              monday={monday}
+              onSelectDay={handleCustomDayClick}
+            />
+          )}
+        </>
+      ) : null}
     </div>
   )
 }

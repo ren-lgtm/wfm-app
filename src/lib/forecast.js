@@ -230,5 +230,8 @@ export function formatWeekLabel(monday) {
 }
 
 export function toISODate(date) {
+  // If already a YYYY-MM-DD string (PT-anchored), return as-is
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date
+  // Otherwise parse Date object
   return new Date(date).toISOString().split('T')[0]
 }
