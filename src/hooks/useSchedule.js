@@ -71,7 +71,8 @@ export function useSchedule({ userId } = {}) {
       .select('*, schedule_slots(*)')
       .eq('week_start', weekStart)
 
-    console.log('[loadWeek] Query result:', { weekStart, schedulesCount: schedules?.length || 0, schedules: schedules ? schedules.map(s => ({ id: s.id, agent: s.agent_id, day: s.day_of_week, slots: s.schedule_slots?.length || 0 })) : null, error })
+    const agentSchedules = schedules?.filter(s => s.agent_id === 'e560470c-1818-4799-996a-a5e97ece6223') || []
+    console.log('[loadWeek] Query result:', { weekStart, schedulesCount: schedules?.length || 0, agentE560Count: agentSchedules.length, agentE560Data: agentSchedules.map(s => ({ day: s.day_of_week, slots: s.schedule_slots ? s.schedule_slots.map(sl => `${sl.hour}:${sl.activity}`).join(',') : 'none' })), error })
 
     if (error) {
       console.error('[loadWeek] Supabase error:', error)
