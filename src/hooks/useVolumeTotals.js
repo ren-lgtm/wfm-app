@@ -6,6 +6,12 @@ const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 // Convert YYYY-MM-DD string to Date object using Date.UTC (no timezone shift)
 function parseYMDString(yyyymmdd) {
+  if (!yyyymmdd) return null
+  // Handle Date objects that were passed instead of strings
+  if (typeof yyyymmdd !== 'string') {
+    console.warn('[parseYMDString] Received non-string:', yyyymmdd, 'type:', typeof yyyymmdd)
+    return yyyymmdd instanceof Date ? yyyymmdd : null
+  }
   const [y, m, d] = yyyymmdd.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d))
 }
@@ -44,9 +50,11 @@ export function useVolumeTotals({
   endDate,          // YYYY-MM-DD string
   phoneForecast,    // { [dow]: { [hour]: count } }
   emailForecast,    // { [dow]: { [hour]: count } }
-  phoneHours = Array.from({ length: PHONE_END - PHONE_START }, (_, i) => PHONE_START + i),
-  emailHours = Array.from({ length: WORK_END - WORK_START }, (_, i) => WORK_START + i)
+  phoneHours = Array.from({ length: 24 }, (_, i) => i),
+  emailHours = Array.from({ length: 24 }, (_, i) => i)
 }) {
+  console.log('[useVolumeTotals] called with:', { startDate, endDate, startDateType: typeof startDate, endDateType: typeof endDate, phoneForecast: !!phoneForecast, emailForecast: !!emailForecast })
+
   const [phoneTotalVolume, setPhoneTotalVolume] = useState(null)
   const [emailTotalVolume, setEmailTotalVolume] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -69,19 +77,25 @@ export function useVolumeTotals({
         let emailTotal = 0
         const todayPT = getTodayPT()
 
+        console.log(`[useVolumeTotals] Date range: ${startDate} to ${endDate}, today: ${todayPT}`)
+
         // ── Query actual data for past/current dates ──────────────────────────
         if (startDate <= todayPT) {
           const queryEnd = endDate <= todayPT ? endDate : todayPT
           const [{ data: phoneVol }, { data: emailVol }] = await Promise.all([
             supabase.from('phone_volume')
-              .select('call_count')
+              .select('date,hour,call_count')
               .gte('date', startDate)
               .lte('date', queryEnd),
             supabase.from('email_volume')
-              .select('tickets_created')
+              .select('date,hour,tickets_created')
               .gte('date', startDate)
               .lte('date', queryEnd)
           ])
+
+          console.log(`[useVolumeTotals] DB results: phone rows=${phoneVol?.length}, email rows=${emailVol?.length}`)
+          if (phoneVol?.length > 0) console.log('  Phone sample:', phoneVol[0])
+          if (emailVol?.length > 0) console.log('  Email sample:', emailVol[0])
 
           for (const row of phoneVol || []) {
             phoneTotal += row.call_count || 0
@@ -89,6 +103,8 @@ export function useVolumeTotals({
           for (const row of emailVol || []) {
             emailTotal += row.tickets_created || 0
           }
+
+          console.log(`[useVolumeTotals] After DB: phoneTotal=${phoneTotal}, emailTotal=${emailTotal}`)
         }
 
         // ── Add forecast for future dates ────────────────────────────────────
@@ -115,8 +131,12 @@ export function useVolumeTotals({
 
         if (cancelled) return
 
-        setPhoneTotalVolume(Math.round(phoneTotal))
-        setEmailTotalVolume(Math.round(emailTotal))
+        const roundedPhone = Math.round(phoneTotal)
+        const roundedEmail = Math.round(emailTotal)
+        console.log(`[useVolumeTotals] Final totals: phone=${roundedPhone}, email=${roundedEmail}`)
+
+        setPhoneTotalVolume(roundedPhone)
+        setEmailTotalVolume(roundedEmail)
       } catch (err) {
         console.error('[useVolumeTotals] Error:', err)
         if (!cancelled) setError(err.message)
