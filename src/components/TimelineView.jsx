@@ -1499,7 +1499,7 @@ function MonthView({ year, month, agents, schedule, monthSchedule, monday, onSel
                       ? 'bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]'
                       : isCurrentMonth ? 'text-gray-300' : 'text-gray-600'
                   }`}>
-                    {date.getDate()}
+                    {parseInt(date.split('-')[2], 10)}
                   </span>
                   {isCurrentMonth && status !== 'none' && (
                     <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
