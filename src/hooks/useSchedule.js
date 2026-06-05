@@ -59,6 +59,7 @@ export function useSchedule({ userId } = {}) {
 
   // Load week schedule
   const loadWeek = useCallback(async (monday) => {
+    console.log('[loadWeek] called with monday:', monday)
     setLoading(true)
     setLoadError(null)
     // monday is now a PT-anchored string from getMondayOfWeek (YYYY-MM-DD format)
@@ -89,6 +90,7 @@ export function useSchedule({ userId } = {}) {
         ws[sched.agent_id][sched.day_of_week] = sched.is_off ? { off: true } : slots
       }
     }
+    console.log('[loadWeek] completed, setting weekSchedule:', JSON.stringify(ws).slice(0, 200))
     setWeekSchedule(ws)
     setLoading(false)
   }, [])
@@ -163,7 +165,7 @@ export function useSchedule({ userId } = {}) {
     let prevSnapshot
     setWeekSchedule(prev => {
       prevSnapshot = prev
-      return {
+      const updated = {
         ...prev,
         [agentId]: {
           ...prev[agentId],
@@ -173,6 +175,8 @@ export function useSchedule({ userId } = {}) {
           }
         }
       }
+      console.log('[updateSlot] optimistic update for', agentId, day, hour, '→ activity:', activity)
+      return updated
     })
 
     setSaving(true)
