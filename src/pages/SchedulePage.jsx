@@ -55,17 +55,7 @@ const NAV = [
 // ─── Main app ─────────────────────────────────────────────────────────────────
 
 export default function SchedulePage({ theme, toggleTheme }) {
-  // Render counter to diagnose re-render loops
-  const renderCount = useRef(0)
-  renderCount.current++
-  console.log('[SchedulePage] render #' + renderCount.current)
-
   const { role, agentId: userAgentId, user, signOut } = useAuth()
-
-  // Debug: log auth status
-  useEffect(() => {
-    console.log('[SchedulePage] Auth status - user:', user?.email, 'role:', role, 'agentId:', userAgentId)
-  }, [user, role, userAgentId])
 
   const {
     agents, currentMonday, weekSchedule, monthSchedule, forecast, slaData, saving, saveError, loadError,
@@ -76,10 +66,9 @@ export default function SchedulePage({ theme, toggleTheme }) {
     shiftTypes, addShiftType, updateShiftType, deleteShiftType, reorderShiftType,
   } = useShiftTypes()
 
-  // Debug: log PT-anchored weekStart
-  useEffect(() => {
-    console.log('[getMondayOfWeek] PT-anchored weekStart:', currentMonday)
-  }, [currentMonday])
+  // Memoize forecast accessors to prevent re-render loops
+  const phoneForecast = useMemo(() => forecast.phoneForecast, [forecast.phoneForecast])
+  const emailForecast = useMemo(() => forecast.emailForecast, [forecast.emailForecast])
 
   // Special sentinel from SettingsPage reset button
   const handleShiftTypeAdd = (form) => {
@@ -114,16 +103,16 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const { phoneTotalVolume, emailTotalVolume } = useVolumeTotals({
     startDate: viewInfo.startDate,
     endDate: viewInfo.endDate,
-    phoneForecast: forecast.phoneForecast,
-    emailForecast: forecast.emailForecast,
+    phoneForecast,
+    emailForecast,
   })
 
   // ── KPI data — answer rate only (calls/tickets now from useVolumeTotals) ──
   const { kpis } = usePeriodKPIs({
     startDate:     startDateObj,
     endDate:       endDateObj,
-    phoneForecast: forecast.phoneForecast,
-    emailForecast: forecast.emailForecast,
+    phoneForecast,
+    emailForecast,
   })
 
   const slaColor = (pct) =>

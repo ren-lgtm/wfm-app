@@ -111,13 +111,9 @@ function formatDate(date, opts) {
   if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     const [y, m, d] = date.split('-').map(Number)
     const utcDate = new Date(Date.UTC(y, m - 1, d))
-    const result = utcDate.toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' })
-    console.log('[DEBUG] formatDate input:', date, 'output:', result)
-    return result
+    return utcDate.toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' })
   }
-  const result = new Date(date).toLocaleDateString('en-US', opts)
-  console.log('[DEBUG] formatDate input:', date, 'output:', result)
-  return result
+  return new Date(date).toLocaleDateString('en-US', opts)
 }
 function getDayOfWeekIdx(date) {
   const d = parsePTDate(date).getDay()
@@ -148,8 +144,6 @@ function getSlotsForDate(schedule, agentId, monday, targetDate) {
   const mondayMs = Date.UTC(my, mm - 1, md)
   const targetMs = Date.UTC(ty, tm - 1, td)
   const dayIdx = Math.round((targetMs - mondayMs) / 86400000)
-
-  console.log('[getSlotsForDate] monday:', monday, 'targetDate:', targetDate, 'mondayYMD:', mondayYMD, 'targetYMD:', targetYMD, 'dayIdx:', dayIdx, 'result:', JSON.stringify(schedule[agentId]?.[dayIdx]))
 
   if (dayIdx < 0 || dayIdx > 6) return {}
   return schedule[agentId]?.[dayIdx] || {}
@@ -310,7 +304,9 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
     // Clear any old block hours that fall outside the new range
     if (isEditing) {
       for (let h = blockStart; h <= blockEnd; h++) {
-        if (h < startHour || h > endHour) updateSlot(agent.id, dow, h, null)
+        if (h < startHour || h > endHour) {
+          updateSlot(agent.id, dow, h, null)
+        }
       }
     }
     // Write new range
@@ -455,7 +451,6 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
 // ─── Day View ─────────────────────────────────────────────────────────────────
 
 function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate, userRole, userAgentId }) {
-  console.log('[DayView] date:', date, 'monday:', monday)
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
@@ -588,10 +583,14 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
 
     if (type === 'move') {
       for (let h = origStart; h <= origEnd; h++) {
-        if (h < previewStart || h > previewEnd) updateSlot(agentId, d, h, null)
+        if (h < previewStart || h > previewEnd) {
+          updateSlot(agentId, d, h, null)
+        }
       }
       for (let h = previewStart; h <= previewEnd; h++) {
-        if (h < origStart || h > origEnd) updateSlot(agentId, d, h, activity)
+        if (h < origStart || h > origEnd) {
+          updateSlot(agentId, d, h, activity)
+        }
       }
     } else {
       if (edge === 'right') {
@@ -1703,11 +1702,9 @@ export default function TimelineView({
     const [m, d, y] = ptToday.split('/')
     return `${y}-${m}-${d}`  // YYYY-MM-DD PT-anchored string
   }, [])
-  console.log('[DEBUG] todayPT:', todayPT)
 
   const [viewMode,     setViewMode]     = useState('day')
   const [selectedDate, setSelectedDate] = useState(todayPT)
-  console.log('[DEBUG] selectedDate initial:', selectedDate)
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [customStart,  setCustomStart]  = useState('')
   const [customEnd,    setCustomEnd]    = useState('')
@@ -1745,7 +1742,6 @@ export default function TimelineView({
     const md = String(monday.getUTCDate()).padStart(2, '0')
     return `${my}-${mm}-${md}`
   }, [hasLiveData, liveMonday, todayPT])
-  console.log('[DEBUG] monday:', monday)
 
   // When selectedDate moves to a different week, sync the parent's currentMonday.
   // This ensures useSchedule loads that week's data and updateSlot writes to the correct week_start.
@@ -1754,7 +1750,6 @@ export default function TimelineView({
     const selectedMonday    = getMondayOfWeek(selectedDate)
     const selectedMondayStr = toISODate(selectedMonday)
     const currentMondayStr  = liveMonday ? toISODate(liveMonday) : null
-    console.log('[week-sync] selectedDate:', toISODate(selectedDate), '→ selectedMonday:', selectedMondayStr, '| liveMonday:', currentMondayStr, '| same:', selectedMondayStr === currentMondayStr)
     if (selectedMondayStr !== currentMondayStr) {
       onWeekChange(selectedMonday)
     }
@@ -1809,7 +1804,6 @@ export default function TimelineView({
     if (viewMode === 'day') {
       const dow = DAYS_SHORT[getDayOfWeekIdx(selectedDate)]
       dows = WEEKDAYS.includes(dow) ? [dow] : []
-      console.log('[DEBUG] Day view - selectedDate:', selectedDate, 'dow:', dow)
       label = formatDate(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' })
       startDate = selectedDate  // Already a YYYY-MM-DD string
       endDate   = selectedDate  // Already a YYYY-MM-DD string

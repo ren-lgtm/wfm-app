@@ -18,7 +18,6 @@ export function useSchedule({ userId } = {}) {
     if (!userId) return
     supabase.from('agents').select('*').eq('active', true).order('name')
       .then(({ data, error }) => {
-        console.log('[useSchedule] agents data:', data, 'error:', error)
         if (data) setAgents(data)
       })
   }, [userId])
@@ -34,7 +33,10 @@ export function useSchedule({ userId } = {}) {
         supabase.from('email_volume').select('day_of_week,hour,tickets_created'),
         supabase.from('phone_sla').select('day_of_week,hour,answered,missed,avg_wait_secs'),
       ])
-      setForecast(buildForecast(phoneRows || [], emailRows || []))
+      const newForecast = buildForecast(phoneRows || [], emailRows || [])
+      setForecast(prev =>
+        JSON.stringify(prev) === JSON.stringify(newForecast) ? prev : newForecast
+      )
 
       // Aggregate SLA by day and hour
       const byDay = {}
@@ -68,19 +70,11 @@ export function useSchedule({ userId } = {}) {
       .select('*, schedule_slots(*)')
       .eq('week_start', weekStart)
 
-    console.log('[loadWeek] weekStart:', weekStart, 'schedules:', schedules, 'error:', error)
-
     if (error) {
       console.error('[loadWeek] Supabase error:', error)
-      console.error('[loadWeek] Error code:', error.code, 'message:', error.message, 'details:', error.details)
       setLoadError(`Failed to load schedule: ${error.message}`)
       setLoading(false)
       return
-    }
-
-    // Check if query returned empty — might indicate RLS policy blocking access
-    if (!schedules || schedules.length === 0) {
-      console.warn('[loadWeek] No schedules returned for week', weekStart, '— this could indicate RLS policy is blocking access for non-admin users')
     }
 
     // Build weekSchedule: { agentId: { day: { hour: activity } } }
@@ -156,7 +150,6 @@ export function useSchedule({ userId } = {}) {
   // Load week schedule when userId is available (session confirmed) and currentMonday changes
   useEffect(() => {
     if (userId) {
-      console.log('[useSchedule] loadWeek triggered - userId:', userId, 'currentMonday:', currentMonday)
       loadWeek(currentMonday)
     }
   }, [currentMonday, loadWeek, userId])
