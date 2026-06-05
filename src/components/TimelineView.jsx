@@ -1701,8 +1701,16 @@ export default function TimelineView({
   // Anchor Monday
   const monday = useMemo(() => {
     if (hasLiveData && liveMonday) return liveMonday
-    // todayPT is already a YYYY-MM-DD string, getMondayOfWeek can accept it
-    return getMondayOfWeek(new Date(todayPT))
+    // Compute Monday from todayPT (PT date string) without parsing through new Date
+    const [y, m, d] = todayPT.split('-').map(Number)
+    const ptDate = new Date(Date.UTC(y, m - 1, d))
+    const dow = ptDate.getUTCDay()
+    const diff = dow === 0 ? -6 : 1 - dow
+    const monday = new Date(Date.UTC(y, m - 1, d + diff))
+    const my = monday.getUTCFullYear()
+    const mm = String(monday.getUTCMonth() + 1).padStart(2, '0')
+    const md = String(monday.getUTCDate()).padStart(2, '0')
+    return `${my}-${mm}-${md}`
   }, [hasLiveData, liveMonday, todayPT])
 
   // When selectedDate moves to a different week, sync the parent's currentMonday.
