@@ -166,7 +166,7 @@ export function useSchedule({ userId } = {}) {
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
     const weekStart = currentMonday
     const agentInState = !!weekSchedule[agentId]
-    console.log('[updateSlot]', {agentId, day, hour, activity, weekStart, agentInState, agentsLoaded: Object.keys(weekSchedule).length})
+    console.log(`[updateSlot] agentInState=${agentInState}, agentsLoaded=${Object.keys(weekSchedule).length}, agent=${agentId.slice(0,8)}, day=${day}, hour=${hour}, activity=${activity}`)
 
     // Snapshot previous state so we can rollback on failure
     let prevSnapshot
