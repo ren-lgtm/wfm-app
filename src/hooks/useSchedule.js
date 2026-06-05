@@ -165,7 +165,8 @@ export function useSchedule({ userId } = {}) {
   // Save a single slot change
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
     const weekStart = currentMonday
-    console.log('[updateSlot]', {agentId, day, hour, activity, weekStart})
+    const agentInState = !!weekSchedule[agentId]
+    console.log('[updateSlot]', {agentId, day, hour, activity, weekStart, agentInState, agentsLoaded: Object.keys(weekSchedule).length})
 
     // Snapshot previous state so we can rollback on failure
     let prevSnapshot
