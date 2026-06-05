@@ -1663,15 +1663,18 @@ export default function TimelineView({
   copyMsg,
   loadMonth,
 }) {
-  const [viewMode,     setViewMode]     = useState('day')
-  const [selectedDate, setSelectedDate] = useState(() => {
+  // Compute today's date in PT (used for Monday anchor and "today" buttons)
+  const todayPT = useMemo(() => {
     const ptToday = new Date().toLocaleDateString('en-US', {
       timeZone: 'America/Los_Angeles',
       year: 'numeric', month: '2-digit', day: '2-digit'
     })
     const [m, d, y] = ptToday.split('/')
     return `${y}-${m}-${d}`  // YYYY-MM-DD PT-anchored string
-  })
+  }, [])
+
+  const [viewMode,     setViewMode]     = useState('day')
+  const [selectedDate, setSelectedDate] = useState(todayPT)
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [customStart,  setCustomStart]  = useState('')
   const [customEnd,    setCustomEnd]    = useState('')
@@ -1698,8 +1701,9 @@ export default function TimelineView({
   // Anchor Monday
   const monday = useMemo(() => {
     if (hasLiveData && liveMonday) return liveMonday
-    return getMondayOfWeek(todayDate)
-  }, [hasLiveData, liveMonday, todayDate])
+    // todayPT is already a YYYY-MM-DD string, getMondayOfWeek can accept it
+    return getMondayOfWeek(new Date(todayPT))
+  }, [hasLiveData, liveMonday, todayPT])
 
   // When selectedDate moves to a different week, sync the parent's currentMonday.
   // This ensures useSchedule loads that week's data and updateSlot writes to the correct week_start.
@@ -1737,10 +1741,10 @@ export default function TimelineView({
 
   // Month date
   const monthDate = useMemo(() => {
-    const d = new Date(todayDate)
+    const d = new Date(todayPT)
     d.setMonth(d.getMonth() + monthOffset)
     return d
-  }, [monthOffset, todayDate])
+  }, [monthOffset, todayPT])
 
   const weekMonday = useMemo(() => getMondayOfWeek(selectedDate), [selectedDate])
 
@@ -1859,7 +1863,7 @@ export default function TimelineView({
                 <ChevronRight size={14} />
               </button>
               <button
-                onClick={() => setSelectedDate(todayDate)}
+                onClick={() => setSelectedDate(todayPT)}
                 className="ml-1 px-2 py-1 text-[10px] rounded bg-[#1A1F2E] text-gray-400 hover:text-white hover:bg-[#2A3245] transition-colors"
               >
                 Today
@@ -1880,7 +1884,7 @@ export default function TimelineView({
                 <ChevronRight size={14} />
               </button>
               <button
-                onClick={() => setSelectedDate(todayDate)}
+                onClick={() => setSelectedDate(todayPT)}
                 className="ml-1 px-2 py-1 text-[10px] rounded bg-[#1A1F2E] text-gray-400 hover:text-white hover:bg-[#2A3245] transition-colors"
               >
                 This week
