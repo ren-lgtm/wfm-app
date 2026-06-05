@@ -82,7 +82,14 @@ export function useVolumeTotals({
         // ── Query actual data for past/current dates ──────────────────────────
         if (startDate <= todayPT) {
           const queryEnd = endDate <= todayPT ? endDate : todayPT
-          console.log(`[useVolumeTotals] Querying actual data for dates: ${startDate} to ${queryEnd}`)
+          console.log('[useVolumeTotals] Phone query params:', {
+            table: 'phone_volume',
+            dateColumn: 'date',
+            gte: startDate,
+            lte: queryEnd,
+            gteType: typeof startDate,
+            lteType: typeof queryEnd
+          })
           const [{ data: phoneVol, error: phoneErr }, { data: emailVol, error: emailErr }] = await Promise.all([
             supabase.from('phone_volume')
               .select('date,hour,call_count')

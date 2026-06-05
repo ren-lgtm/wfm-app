@@ -1408,7 +1408,9 @@ function MonthView({ year, month, agents, schedule, monthSchedule, monday, onSel
   const firstDay  = new Date(year, month, 1)
   const lastDay   = new Date(year, month + 1, 0)
   const startDow  = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
-  const calStart  = addDays(firstDay, -startDow)
+  // Convert firstDay to YYYY-MM-DD string before passing to addDays
+  const firstDayStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
+  const calStart  = addDays(firstDayStr, -startDow)
 
   const weeks = []
   for (let w = 0; w < 6; w++) {
@@ -1547,13 +1549,8 @@ function CustomRangeView({ startDate, endDate, agents, schedule, monday, onSelec
     )
   }
 
-  // Parse YYYY-MM-DD strings as local dates (avoid UTC shift)
-  const [sy, sm, sd] = startDate.split('-').map(Number)
-  const [ey, em, ed] = endDate.split('-').map(Number)
-  const start = new Date(sy, sm - 1, sd)
-  const end   = new Date(ey, em - 1, ed)
-
-  if (end < start) {
+  // startDate and endDate are already YYYY-MM-DD strings
+  if (endDate < startDate) {
     return (
       <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-10 text-center text-red-400 text-sm">
         End date must be after start date.
@@ -1561,7 +1558,13 @@ function CustomRangeView({ startDate, endDate, agents, schedule, monday, onSelec
     )
   }
 
+  // Calculate day count from date strings
+  const [sy, sm, sd] = startDate.split('-').map(Number)
+  const [ey, em, ed] = endDate.split('-').map(Number)
+  const start = new Date(sy, sm - 1, sd)
+  const end   = new Date(ey, em - 1, ed)
   const diffDays = Math.round((end - start) / 86400000) + 1
+
   if (diffDays > 60) {
     return (
       <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-10 text-center text-amber-400 text-sm">
@@ -1570,7 +1573,8 @@ function CustomRangeView({ startDate, endDate, agents, schedule, monday, onSelec
     )
   }
 
-  const dates = Array.from({ length: diffDays }, (_, i) => addDays(start, i))
+  // Use startDate string directly with addDays, not the Date object
+  const dates = Array.from({ length: diffDays }, (_, i) => addDays(startDate, i))
 
   return (
     <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
