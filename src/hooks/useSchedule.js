@@ -185,15 +185,18 @@ export function useSchedule({ userId } = {}) {
           .delete()
           .eq('schedule_id', sched.id)
           .eq('hour', hour)
+        console.log('[updateSlot] schedule_slots delete:', { scheduleId: sched.id, hour, error: delErr })
         if (delErr) throw new Error(`schedule_slots delete: ${delErr.message}`)
       } else {
         // Upsert the slot with a real activity value
-        const { error: slotErr } = await supabase
+        const { data: slot, error: slotErr } = await supabase
           .from('schedule_slots')
           .upsert(
             { schedule_id: sched.id, hour, activity },
             { onConflict: 'schedule_id,hour' }
           )
+          .select()
+        console.log('[updateSlot] schedule_slots upsert:', { scheduleId: sched.id, hour, activity, data: slot ? 'SUCCESS' : 'null', error: slotErr })
         if (slotErr) throw new Error(`schedule_slots upsert: ${slotErr.message}`)
       }
       // Save succeeded — reload data to ensure UI sees the change
