@@ -199,6 +199,7 @@ export function useSchedule({ userId } = {}) {
           .delete()
           .eq('schedule_id', sched.id)
           .eq('hour', hour)
+        console.log('[updateSlot] schedule_slots delete result:', {error: delErr})
         if (delErr) throw new Error(`schedule_slots delete: ${delErr.message}`)
       } else {
         // Upsert the slot with a real activity value
@@ -208,6 +209,7 @@ export function useSchedule({ userId } = {}) {
             { schedule_id: sched.id, hour, activity },
             { onConflict: 'schedule_id,hour' }
           )
+        console.log('[updateSlot] schedule_slots upsert result:', {error: slotErr})
         if (slotErr) throw new Error(`schedule_slots upsert: ${slotErr.message}`)
       }
     } catch (err) {
