@@ -16,6 +16,12 @@ import { useVolumeTotals } from '../hooks/useVolumeTotals'
 import { useAvgHandleRate } from '../hooks/useAvgHandleRate'
 import { useAuth } from '../contexts/AuthContext'
 
+// Convert YYYY-MM-DD string to Date object (UTC midnight)
+function parseDateString(ymdStr) {
+  if (!ymdStr) return null
+  const [y, m, d] = ymdStr.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
+}
 
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
 
@@ -89,13 +95,17 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today', startDate: null, endDate: null })
   const handleViewChange = useCallback((info) => setViewInfo(info), [])
 
+  // Convert YYYY-MM-DD strings to Date objects for hooks that expect them
+  const startDateObj = parseDateString(viewInfo.startDate)
+  const endDateObj = parseDateString(viewInfo.endDate)
+
   const { rangeRate, benchmarkRate } = useAvgHandleRate({
-    startDate: viewInfo.startDate,
-    endDate:   viewInfo.endDate,
+    startDate: startDateObj,
+    endDate:   endDateObj,
   })
 
   // ── Volume totals for KPI cards ──
-  // startDate and endDate are YYYY-MM-DD strings from TimelineView
+  // useVolumeTotals needs YYYY-MM-DD strings directly
   const { phoneTotalVolume, emailTotalVolume } = useVolumeTotals({
     startDate: viewInfo.startDate,
     endDate: viewInfo.endDate,
@@ -105,8 +115,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
 
   // ── KPI data — answer rate only (calls/tickets now from useVolumeTotals) ──
   const { kpis } = usePeriodKPIs({
-    startDate:     viewInfo.startDate,
-    endDate:       viewInfo.endDate,
+    startDate:     startDateObj,
+    endDate:       endDateObj,
     phoneForecast: forecast.phoneForecast,
     emailForecast: forecast.emailForecast,
   })
