@@ -106,7 +106,16 @@ function addDays(dateStr, days) {
   return `${ry}-${rm}-${rd}`  // return PT-anchored YYYY-MM-DD string
 }
 function formatDate(date, opts) {
-  const result = parsePTDate(date).toLocaleDateString('en-US', opts)
+  // YYYY-MM-DD strings are parsed as UTC via parsePTDate, so use timeZone: 'UTC'
+  // to format them without shifting to local time
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [y, m, d] = date.split('-').map(Number)
+    const utcDate = new Date(Date.UTC(y, m - 1, d))
+    const result = utcDate.toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' })
+    console.log('[DEBUG] formatDate input:', date, 'output:', result)
+    return result
+  }
+  const result = new Date(date).toLocaleDateString('en-US', opts)
   console.log('[DEBUG] formatDate input:', date, 'output:', result)
   return result
 }
