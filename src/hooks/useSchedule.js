@@ -7,11 +7,6 @@ export function useSchedule({ userId } = {}) {
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()))
   const [weekSchedule, setWeekSchedule] = useState({}) // { agentId: { Mon: { hour: activity } } }
 
-  // Track all weekSchedule state changes
-  useEffect(() => {
-    const agentIds = Object.keys(weekSchedule)
-    console.log('[weekSchedule] agents in state:', agentIds.length, '—', agentIds.join(', ').slice(0, 100))
-  }, [weekSchedule])
   const [monthSchedule, setMonthSchedule] = useState({}) // { agentId: { dateStr: { hour: activity } } } for entire month
   const [forecast, setForecast] = useState({ phoneForecast: {}, emailForecast: {} })
   const [loading, setLoading] = useState(true)
@@ -65,7 +60,6 @@ export function useSchedule({ userId } = {}) {
 
   // Load week schedule
   const loadWeek = useCallback(async (monday) => {
-    console.log('[loadWeek] called with monday:', monday)
     setLoading(true)
     setLoadError(null)
     // monday is now a PT-anchored string from getMondayOfWeek (YYYY-MM-DD format)
@@ -96,7 +90,6 @@ export function useSchedule({ userId } = {}) {
         ws[sched.agent_id][sched.day_of_week] = sched.is_off ? { off: true } : slots
       }
     }
-    console.log('[loadWeek] completed, setting weekSchedule:', JSON.stringify(ws).slice(0, 200))
     setWeekSchedule(ws)
     setLoading(false)
   }, [])
@@ -158,7 +151,6 @@ export function useSchedule({ userId } = {}) {
   // Load week schedule when userId is available (session confirmed) and currentMonday changes
   useEffect(() => {
     if (userId) {
-      console.log('[useEffect loadWeek trigger] currentMonday or loadWeek changed')
       loadWeek(currentMonday)
     }
   }, [currentMonday, loadWeek, userId])
@@ -166,14 +158,12 @@ export function useSchedule({ userId } = {}) {
   // Save a single slot change
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
     const weekStart = currentMonday
-    const agentInState = !!weekSchedule[agentId]
-    console.log(`[updateSlot] agentInState=${agentInState}, agentsLoaded=${Object.keys(weekSchedule).length}, agent=${agentId.slice(0,8)}, day=${day}, hour=${hour}, activity=${activity}`)
 
     // Snapshot previous state so we can rollback on failure
     let prevSnapshot
     setWeekSchedule(prev => {
       prevSnapshot = prev
-      const updated = {
+      return {
         ...prev,
         [agentId]: {
           ...prev[agentId],
@@ -183,8 +173,6 @@ export function useSchedule({ userId } = {}) {
           }
         }
       }
-      console.log('[updateSlot] optimistic update for', agentId, day, hour, '→ activity:', activity)
-      return updated
     })
 
     setSaving(true)
@@ -200,7 +188,6 @@ export function useSchedule({ userId } = {}) {
         .select()
         .single()
 
-      console.log('[updateSlot] result:', {data: sched, error: schedErr})
       if (schedErr) throw new Error(`schedules upsert: ${schedErr.message}`)
       if (!sched) throw new Error('schedules upsert returned no row')
 
@@ -211,7 +198,6 @@ export function useSchedule({ userId } = {}) {
           .delete()
           .eq('schedule_id', sched.id)
           .eq('hour', hour)
-        console.log('[updateSlot] schedule_slots delete result:', {error: delErr})
         if (delErr) throw new Error(`schedule_slots delete: ${delErr.message}`)
       } else {
         // Upsert the slot with a real activity value
@@ -221,10 +207,8 @@ export function useSchedule({ userId } = {}) {
             { schedule_id: sched.id, hour, activity },
             { onConflict: 'schedule_id,hour' }
           )
-        console.log('[updateSlot] schedule_slots upsert result:', {error: slotErr})
         if (slotErr) throw new Error(`schedule_slots upsert: ${slotErr.message}`)
       }
-      console.log('[updateSlot] SUCCESS - all DB operations completed')
     } catch (err) {
       console.error('[updateSlot] Save failed:', err)
       setSaveError(err.message)
@@ -232,10 +216,8 @@ export function useSchedule({ userId } = {}) {
       setWeekSchedule(prevSnapshot)
     } finally {
       setSaving(false)
-      const agentData = weekSchedule[agentId]?.[day]
-      console.log(`[updateSlot] DONE - agent Thu data:`, agentData ? JSON.stringify(agentData).slice(0, 100) : 'undefined')
     }
-  }, [currentMonday, weekSchedule])
+  }, [currentMonday])
 
   // Mark agent as off for a day
   const markOff = useCallback(async (agentId, day) => {
