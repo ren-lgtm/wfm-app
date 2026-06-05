@@ -16,18 +16,6 @@ import { useVolumeTotals } from '../hooks/useVolumeTotals'
 import { useAvgHandleRate } from '../hooks/useAvgHandleRate'
 import { useAuth } from '../contexts/AuthContext'
 
-// Convert Date object to YYYY-MM-DD string using PT timezone
-function dateToYMD(date) {
-  if (!date) return null
-  const ptStr = date.toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
-  const [m, d, y] = ptStr.split('/')
-  return `${y}-${m}-${d}`
-}
 
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
 
@@ -107,11 +95,10 @@ export default function SchedulePage({ theme, toggleTheme }) {
   })
 
   // ── Volume totals for KPI cards ──
-  const startYMD = dateToYMD(viewInfo.startDate)
-  const endYMD = dateToYMD(viewInfo.endDate)
+  // startDate and endDate are YYYY-MM-DD strings from TimelineView
   const { phoneTotalVolume, emailTotalVolume } = useVolumeTotals({
-    startDate: startYMD,
-    endDate: endYMD,
+    startDate: viewInfo.startDate,
+    endDate: viewInfo.endDate,
     phoneForecast: forecast.phoneForecast,
     emailForecast: forecast.emailForecast,
   })

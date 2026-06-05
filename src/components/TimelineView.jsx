@@ -1803,14 +1803,14 @@ export default function TimelineView({
       dows = WEEKDAYS.includes(dow) ? [dow] : []
       console.log('[DEBUG] Day view - selectedDate:', selectedDate, 'dow:', dow)
       label = formatDate(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' })
-      startDate = parsePTDate(selectedDate)
-      endDate   = parsePTDate(selectedDate)
+      startDate = selectedDate  // Already a YYYY-MM-DD string
+      endDate   = selectedDate  // Already a YYYY-MM-DD string
 
     } else if (viewMode === 'week') {
       dows = [...WEEKDAYS]
       label = `${formatDate(weekMonday, { month: 'short', day: 'numeric' })} – ${formatDate(addDays(weekMonday, 4), { month: 'short', day: 'numeric' })}`
-      startDate = parsePTDate(weekMonday)
-      endDate   = parsePTDate(addDays(weekMonday, 6))
+      startDate = weekMonday  // Already a YYYY-MM-DD string
+      endDate   = addDays(weekMonday, 6)  // Already a YYYY-MM-DD string
 
     } else if (viewMode === 'month') {
       const yr = monthDate.getFullYear()
@@ -1821,23 +1821,22 @@ export default function TimelineView({
         if (WEEKDAYS.includes(dow)) dows.push(dow)
       }
       label = `${MONTHS_SHORT[mo]} ${yr}`
-      startDate = new Date(yr, mo, 1)
-      endDate   = new Date(yr, mo + 1, 0)
+      // Convert to YYYY-MM-DD strings
+      startDate = `${yr}-${String(mo + 1).padStart(2, '0')}-01`
+      endDate   = `${yr}-${String(mo + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`
 
     } else if (viewMode === 'custom') {
       if (customStart && customEnd) {
         const [sy, sm, sd] = customStart.split('-').map(Number)
         const [ey, em, ed] = customEnd.split('-').map(Number)
-        const start = new Date(sy, sm - 1, sd)
-        const end   = new Date(ey, em - 1, ed)
-        if (end >= start) {
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        if (customEnd >= customStart) {
+          for (let d = new Date(sy, sm - 1, sd); d <= new Date(ey, em - 1, ed); d.setDate(d.getDate() + 1)) {
             const dow = DAYS_SHORT[getDayOfWeekIdx(new Date(d))]
             if (WEEKDAYS.includes(dow)) dows.push(dow)
           }
           label = `${customStart} – ${customEnd}`
-          startDate = start
-          endDate   = end
+          startDate = customStart  // Already a YYYY-MM-DD string
+          endDate   = customEnd    // Already a YYYY-MM-DD string
         }
       }
     }
