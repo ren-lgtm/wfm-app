@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown,
   Users, BarChart2, Calendar,
@@ -95,9 +95,9 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today', startDate: null, endDate: null })
   const handleViewChange = useCallback((info) => setViewInfo(info), [])
 
-  // Convert YYYY-MM-DD strings to Date objects for hooks that expect them
-  const startDateObj = parseDateString(viewInfo.startDate)
-  const endDateObj = parseDateString(viewInfo.endDate)
+  // Convert YYYY-MM-DD strings to Date objects for hooks that expect them (memoized to prevent re-render loop)
+  const startDateObj = useMemo(() => parseDateString(viewInfo.startDate), [viewInfo.startDate])
+  const endDateObj = useMemo(() => parseDateString(viewInfo.endDate), [viewInfo.endDate])
 
   const { rangeRate, benchmarkRate } = useAvgHandleRate({
     startDate: startDateObj,
