@@ -189,6 +189,7 @@ export function useSchedule({ userId } = {}) {
         .single()
         .catch(err => { console.error('[updateSlot] FAILED:', err); throw err })
 
+      console.log('[updateSlot] result:', {data: sched, error: schedErr})
       if (schedErr) throw new Error(`schedules upsert: ${schedErr.message}`)
       if (!sched) throw new Error('schedules upsert returned no row')
 
