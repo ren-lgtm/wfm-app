@@ -12,8 +12,22 @@ import UsersPage from './UsersPage'
 import SettingsPage from './SettingsPage'
 import { DAYS, formatWeekLabel } from '../lib/forecast'
 import { usePeriodKPIs } from '../hooks/usePeriodKPIs'
+import { useVolumeTotals } from '../hooks/useVolumeTotals'
 import { useAvgHandleRate } from '../hooks/useAvgHandleRate'
 import { useAuth } from '../contexts/AuthContext'
+
+// Convert Date object to YYYY-MM-DD string using PT timezone
+function dateToYMD(date) {
+  if (!date) return null
+  const ptStr = date.toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+  const [m, d, y] = ptStr.split('/')
+  return `${y}-${m}-${d}`
+}
 
 // ─── Sidebar nav ─────────────────────────────────────────────────────────────
 
@@ -92,7 +106,17 @@ export default function SchedulePage({ theme, toggleTheme }) {
     endDate:   viewInfo.endDate,
   })
 
-  // ── KPI data — real DB data for past/current, forecast for future ──
+  // ── Volume totals for KPI cards ──
+  const startYMD = dateToYMD(viewInfo.startDate)
+  const endYMD = dateToYMD(viewInfo.endDate)
+  const { phoneTotalVolume, emailTotalVolume } = useVolumeTotals({
+    startDate: startYMD,
+    endDate: endYMD,
+    phoneForecast: forecast.phoneForecast,
+    emailForecast: forecast.emailForecast,
+  })
+
+  // ── KPI data — answer rate only (calls/tickets now from useVolumeTotals) ──
   const { kpis } = usePeriodKPIs({
     startDate:     viewInfo.startDate,
     endDate:       viewInfo.endDate,
@@ -321,7 +345,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Inbound calls · {viewInfo.label}</div>
-                  <div className="text-2xl font-mono font-medium text-gray-300">{kpis ? kpis.calls.toLocaleString() : '—'}</div>
+                  <div className="text-2xl font-mono font-medium text-gray-300">{phoneTotalVolume !== null ? phoneTotalVolume.toLocaleString() : '—'}</div>
                   <div className="text-[10px] text-gray-600 mt-1">{kpis?.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
@@ -333,7 +357,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Tickets created · {viewInfo.label}</div>
-                  <div className="text-2xl font-mono font-medium text-gray-300">{kpis ? kpis.ticketsCreated.toLocaleString() : '—'}</div>
+                  <div className="text-2xl font-mono font-medium text-gray-300">{emailTotalVolume !== null ? emailTotalVolume.toLocaleString() : '—'}</div>
                   <div className="text-[10px] text-gray-600 mt-1">{kpis?.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
