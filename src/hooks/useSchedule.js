@@ -9,7 +9,8 @@ export function useSchedule({ userId } = {}) {
 
   // Track all weekSchedule state changes
   useEffect(() => {
-    console.log('[weekSchedule changed]', JSON.stringify(weekSchedule).slice(0, 200))
+    const agentIds = Object.keys(weekSchedule)
+    console.log('[weekSchedule] agents in state:', agentIds.length, '—', agentIds.join(', ').slice(0, 100))
   }, [weekSchedule])
   const [monthSchedule, setMonthSchedule] = useState({}) // { agentId: { dateStr: { hour: activity } } } for entire month
   const [forecast, setForecast] = useState({ phoneForecast: {}, emailForecast: {} })
