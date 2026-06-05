@@ -71,6 +71,8 @@ export function useSchedule({ userId } = {}) {
       .select('*, schedule_slots(*)')
       .eq('week_start', weekStart)
 
+    console.log('[loadWeek] Query result:', { weekStart, schedulesCount: schedules?.length || 0, schedules: schedules ? schedules.map(s => ({ id: s.id, agent: s.agent_id, day: s.day_of_week, slots: s.schedule_slots?.length || 0 })) : null, error })
+
     if (error) {
       console.error('[loadWeek] Supabase error:', error)
       setLoadError(`Failed to load schedule: ${error.message}`)
