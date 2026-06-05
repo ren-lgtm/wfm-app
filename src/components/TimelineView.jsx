@@ -1758,10 +1758,6 @@ export default function TimelineView({
   // Schedule (live only, null while loading to prevent mock data flash)
   const schedule = useMemo(() => {
     if (!hasLiveData) return null  // Don't show mock data — wait for real data
-    const hasData = Object.values(liveSchedule || {}).some(aw =>
-      Object.values(aw || {}).some(ds => Object.keys(ds || {}).length > 0)
-    )
-    if (!hasData) return null  // No data yet — wait rather than showing placeholder
     const converted = {}
     for (const agent of agents) {
       converted[agent.id] = {}
