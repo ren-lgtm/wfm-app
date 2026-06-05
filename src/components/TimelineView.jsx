@@ -149,6 +149,8 @@ function getSlotsForDate(schedule, agentId, monday, targetDate) {
   const targetMs = Date.UTC(ty, tm - 1, td)
   const dayIdx = Math.round((targetMs - mondayMs) / 86400000)
 
+  console.log('[getSlotsForDate] monday:', monday, 'targetDate:', targetDate, 'mondayYMD:', mondayYMD, 'targetYMD:', targetYMD, 'dayIdx:', dayIdx, 'result:', JSON.stringify(schedule[agentId]?.[dayIdx]))
+
   if (dayIdx < 0 || dayIdx > 6) return {}
   return schedule[agentId]?.[dayIdx] || {}
 }
@@ -453,6 +455,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
 // ─── Day View ─────────────────────────────────────────────────────────────────
 
 function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate, userRole, userAgentId }) {
+  console.log('[DayView] date:', date, 'monday:', monday)
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
