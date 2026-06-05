@@ -158,6 +158,7 @@ export function useSchedule({ userId } = {}) {
   // Load week schedule when userId is available (session confirmed) and currentMonday changes
   useEffect(() => {
     if (userId) {
+      console.log('[useEffect loadWeek trigger] currentMonday or loadWeek changed')
       loadWeek(currentMonday)
     }
   }, [currentMonday, loadWeek, userId])
@@ -231,6 +232,7 @@ export function useSchedule({ userId } = {}) {
       setWeekSchedule(prevSnapshot)
     } finally {
       setSaving(false)
+      console.log('[updateSlot] DONE - no error, weekSchedule should be updated')
     }
   }, [currentMonday, weekSchedule])
 
