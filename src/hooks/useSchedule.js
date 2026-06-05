@@ -71,11 +71,6 @@ export function useSchedule({ userId } = {}) {
       .select('*, schedule_slots(*)')
       .eq('week_start', weekStart)
 
-    const agentSchedules = schedules?.filter(s => s.agent_id === 'e560470c-1818-4799-996a-a5e97ece6223') || []
-    const thuSchedule = agentSchedules.find(s => s.day_of_week === 'Thu')
-    const thuSlots = thuSchedule?.schedule_slots ? thuSchedule.schedule_slots.map(sl => `h${sl.hour}:${sl.activity}`).join(' ') : 'none'
-    console.log(`[loadWeek] ${weekStart} - agent e560 Thu slots: ${thuSlots}`)
-
     if (error) {
       console.error('[loadWeek] Supabase error:', error)
       setLoadError(`Failed to load schedule: ${error.message}`)
@@ -163,7 +158,6 @@ export function useSchedule({ userId } = {}) {
   // Save a single slot change
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
     const weekStart = currentMonday
-    console.log('[updateSlot] Saving:', { weekStart, agentId, day, hour, activity, weekStartType: typeof weekStart })
 
     setSaving(true)
     setSaveError(null)
@@ -178,7 +172,6 @@ export function useSchedule({ userId } = {}) {
         .select()
         .single()
 
-      console.log('[updateSlot] Schedules upsert returned:', { data: sched ? 'SUCCESS with ID ' + sched.id : 'null', error: schedErr })
 
       if (schedErr) throw new Error(`schedules upsert: ${schedErr.message}`)
       if (!sched) throw new Error('schedules upsert returned no row')
@@ -190,7 +183,6 @@ export function useSchedule({ userId } = {}) {
           .delete()
           .eq('schedule_id', sched.id)
           .eq('hour', hour)
-        console.log('[updateSlot] schedule_slots delete:', { scheduleId: sched.id, hour, error: delErr })
         if (delErr) throw new Error(`schedule_slots delete: ${delErr.message}`)
       } else {
         // Upsert the slot with a real activity value
@@ -201,7 +193,6 @@ export function useSchedule({ userId } = {}) {
             { onConflict: 'schedule_id,hour' }
           )
           .select()
-        console.log('[updateSlot] schedule_slots upsert:', { scheduleId: sched.id, hour, activity, data: slot ? 'SUCCESS' : 'null', error: slotErr })
         if (slotErr) throw new Error(`schedule_slots upsert: ${slotErr.message}`)
       }
       // Save succeeded — reload data to ensure UI sees the change
