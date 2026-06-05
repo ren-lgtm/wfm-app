@@ -216,6 +216,7 @@ export function useSchedule({ userId } = {}) {
         console.log('[updateSlot] schedule_slots upsert result:', {error: slotErr})
         if (slotErr) throw new Error(`schedule_slots upsert: ${slotErr.message}`)
       }
+      console.log('[updateSlot] SUCCESS - all DB operations completed')
     } catch (err) {
       console.error('[updateSlot] Save failed:', err)
       setSaveError(err.message)
