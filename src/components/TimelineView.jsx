@@ -1663,17 +1663,15 @@ export default function TimelineView({
   copyMsg,
   loadMonth,
 }) {
-  const todayPT = useMemo(() => {
+  const [viewMode,     setViewMode]     = useState('day')
+  const [selectedDate, setSelectedDate] = useState(() => {
     const ptToday = new Date().toLocaleDateString('en-US', {
       timeZone: 'America/Los_Angeles',
       year: 'numeric', month: '2-digit', day: '2-digit'
     })
     const [m, d, y] = ptToday.split('/')
     return `${y}-${m}-${d}`  // YYYY-MM-DD PT-anchored string
-  }, [])
-
-  const [viewMode,     setViewMode]     = useState('day')
-  const [selectedDate, setSelectedDate] = useState(todayPT)
+  })
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [customStart,  setCustomStart]  = useState('')
   const [customEnd,    setCustomEnd]    = useState('')
