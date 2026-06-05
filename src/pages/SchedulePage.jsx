@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown,
   Users, BarChart2, Calendar,
@@ -55,6 +55,11 @@ const NAV = [
 // ─── Main app ─────────────────────────────────────────────────────────────────
 
 export default function SchedulePage({ theme, toggleTheme }) {
+  // Render counter to diagnose re-render loops
+  const renderCount = useRef(0)
+  renderCount.current++
+  console.log('[SchedulePage] render #' + renderCount.current)
+
   const { role, agentId: userAgentId, user, signOut } = useAuth()
 
   // Debug: log auth status
