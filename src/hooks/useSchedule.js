@@ -232,7 +232,7 @@ export function useSchedule({ userId } = {}) {
     } finally {
       setSaving(false)
     }
-  }, [currentMonday])
+  }, [currentMonday, weekSchedule])
 
   // Mark agent as off for a day
   const markOff = useCallback(async (agentId, day) => {
