@@ -232,7 +232,8 @@ export function useSchedule({ userId } = {}) {
       setWeekSchedule(prevSnapshot)
     } finally {
       setSaving(false)
-      console.log('[updateSlot] DONE - no error, weekSchedule should be updated')
+      const agentData = weekSchedule[agentId]?.[day]
+      console.log(`[updateSlot] DONE - agent Thu data:`, agentData ? JSON.stringify(agentData).slice(0, 100) : 'undefined')
     }
   }, [currentMonday, weekSchedule])
 
