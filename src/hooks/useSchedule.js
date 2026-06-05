@@ -159,22 +159,6 @@ export function useSchedule({ userId } = {}) {
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
     const weekStart = currentMonday
 
-    // Snapshot previous state so we can rollback on failure
-    let prevSnapshot
-    setWeekSchedule(prev => {
-      prevSnapshot = prev
-      return {
-        ...prev,
-        [agentId]: {
-          ...prev[agentId],
-          [day]: {
-            ...(prev[agentId]?.[day] || {}),
-            [hour]: activity,
-          }
-        }
-      }
-    })
-
     setSaving(true)
     setSaveError(null)
     try {
@@ -214,8 +198,6 @@ export function useSchedule({ userId } = {}) {
     } catch (err) {
       console.error('[updateSlot] Save failed:', err)
       setSaveError(err.message)
-      // Rollback optimistic update
-      setWeekSchedule(prevSnapshot)
     } finally {
       setSaving(false)
     }
