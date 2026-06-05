@@ -209,6 +209,8 @@ export function useSchedule({ userId } = {}) {
           )
         if (slotErr) throw new Error(`schedule_slots upsert: ${slotErr.message}`)
       }
+      // Save succeeded — reload data to ensure UI sees the change
+      await loadWeek(weekStart)
     } catch (err) {
       console.error('[updateSlot] Save failed:', err)
       setSaveError(err.message)
@@ -217,7 +219,7 @@ export function useSchedule({ userId } = {}) {
     } finally {
       setSaving(false)
     }
-  }, [currentMonday])
+  }, [currentMonday, loadWeek])
 
   // Mark agent as off for a day
   const markOff = useCallback(async (agentId, day) => {
