@@ -1417,7 +1417,9 @@ function MonthView({ year, month, agents, schedule, monthSchedule, monday, onSel
     const week = []
     for (let d = 0; d < 7; d++) week.push(addDays(calStart, w * 7 + d))
     weeks.push(week)
-    if (week[6] >= lastDay) break
+    // Compare last day of week with last day of month (both as YYYY-MM-DD strings)
+    const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`
+    if (week[6] >= lastDayStr) break
   }
 
   const todayStr = isoStr(new Date())
@@ -1470,7 +1472,9 @@ function MonthView({ year, month, agents, schedule, monthSchedule, monday, onSel
       {weeks.map((week, wi) => (
         <div key={wi} className="grid grid-cols-7 border-b border-[#2A3245] last:border-b-0" style={{ minHeight: 90 }}>
           {week.map((date, di) => {
-            const isCurrentMonth = date.getMonth() === month
+            // date is a YYYY-MM-DD string; extract month to compare with current month
+            const dateMonth = parseInt(date.split('-')[1]) - 1
+            const isCurrentMonth = dateMonth === month
             const isToday        = isoStr(date) === todayStr
             const isWeekend      = di >= 5
             const { emailAgents, totalHours, status, scheduledAgents } = getCoverageForDate(date)
