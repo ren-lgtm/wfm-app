@@ -106,7 +106,9 @@ function addDays(dateStr, days) {
   return `${ry}-${rm}-${rd}`  // return PT-anchored YYYY-MM-DD string
 }
 function formatDate(date, opts) {
-  return parsePTDate(date).toLocaleDateString('en-US', opts)
+  const result = parsePTDate(date).toLocaleDateString('en-US', opts)
+  console.log('[DEBUG] formatDate input:', date, 'output:', result)
+  return result
 }
 function getDayOfWeekIdx(date) {
   const d = parsePTDate(date).getDay()
@@ -1681,9 +1683,11 @@ export default function TimelineView({
     const [m, d, y] = ptToday.split('/')
     return `${y}-${m}-${d}`  // YYYY-MM-DD PT-anchored string
   }, [])
+  console.log('[DEBUG] todayPT:', todayPT)
 
   const [viewMode,     setViewMode]     = useState('day')
   const [selectedDate, setSelectedDate] = useState(todayPT)
+  console.log('[DEBUG] selectedDate initial:', selectedDate)
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [customStart,  setCustomStart]  = useState('')
   const [customEnd,    setCustomEnd]    = useState('')
@@ -1721,6 +1725,7 @@ export default function TimelineView({
     const md = String(monday.getUTCDate()).padStart(2, '0')
     return `${my}-${mm}-${md}`
   }, [hasLiveData, liveMonday, todayPT])
+  console.log('[DEBUG] monday:', monday)
 
   // When selectedDate moves to a different week, sync the parent's currentMonday.
   // This ensures useSchedule loads that week's data and updateSlot writes to the correct week_start.
@@ -1784,6 +1789,7 @@ export default function TimelineView({
     if (viewMode === 'day') {
       const dow = DAYS_SHORT[getDayOfWeekIdx(selectedDate)]
       dows = WEEKDAYS.includes(dow) ? [dow] : []
+      console.log('[DEBUG] Day view - selectedDate:', selectedDate, 'dow:', dow)
       label = formatDate(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' })
       startDate = parsePTDate(selectedDate)
       endDate   = parsePTDate(selectedDate)
