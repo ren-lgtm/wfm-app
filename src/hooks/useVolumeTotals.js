@@ -54,8 +54,8 @@ export function useVolumeTotals({
 
   useEffect(() => {
     if (!startDate || !endDate) {
-      setPhoneTotalVolume(0)
-      setEmailTotalVolume(0)
+      setPhoneTotalVolume(null)
+      setEmailTotalVolume(null)
       return
     }
 
