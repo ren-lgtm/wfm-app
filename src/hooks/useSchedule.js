@@ -158,6 +158,7 @@ export function useSchedule({ userId } = {}) {
   // Save a single slot change
   const updateSlot = useCallback(async (agentId, day, hour, activity) => {
     const weekStart = currentMonday
+    console.log('[updateSlot] Saving:', { weekStart, agentId, day, hour, activity, weekStartType: typeof weekStart })
 
     setSaving(true)
     setSaveError(null)
@@ -171,6 +172,8 @@ export function useSchedule({ userId } = {}) {
         )
         .select()
         .single()
+
+      console.log('[updateSlot] Schedules upsert returned:', { data: sched ? 'SUCCESS with ID ' + sched.id : 'null', error: schedErr })
 
       if (schedErr) throw new Error(`schedules upsert: ${schedErr.message}`)
       if (!sched) throw new Error('schedules upsert returned no row')
