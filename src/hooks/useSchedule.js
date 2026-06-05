@@ -337,15 +337,21 @@ export function useSchedule({ userId } = {}) {
   const goToWeek = useCallback((monday) => setCurrentMonday(monday), [])
 
   const goNextWeek = useCallback(() => {
-    const next = new Date(currentMonday)
-    next.setDate(next.getDate() + 7)
-    setCurrentMonday(next)
+    const [y, m, d] = currentMonday.split('-').map(Number)
+    const next = new Date(Date.UTC(y, m - 1, d + 7))
+    const nextY = next.getUTCFullYear()
+    const nextM = String(next.getUTCMonth() + 1).padStart(2, '0')
+    const nextD = String(next.getUTCDate()).padStart(2, '0')
+    setCurrentMonday(`${nextY}-${nextM}-${nextD}`)
   }, [currentMonday])
 
   const goPrevWeek = useCallback(() => {
-    const prev = new Date(currentMonday)
-    prev.setDate(prev.getDate() - 7)
-    setCurrentMonday(prev)
+    const [y, m, d] = currentMonday.split('-').map(Number)
+    const prev = new Date(Date.UTC(y, m - 1, d - 7))
+    const prevY = prev.getUTCFullYear()
+    const prevM = String(prev.getUTCMonth() + 1).padStart(2, '0')
+    const prevD = String(prev.getUTCDate()).padStart(2, '0')
+    setCurrentMonday(`${prevY}-${prevM}-${prevD}`)
   }, [currentMonday])
 
   // Get slots for a specific agent/day
