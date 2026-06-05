@@ -97,6 +97,13 @@ function addDays(dateStr, days) {
   return `${ry}-${rm}-${rd}`  // return PT-anchored YYYY-MM-DD string
 }
 function formatDate(date, opts) {
+  // If date is a YYYY-MM-DD string (PT-anchored), parse it safely without UTC shift
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [y, m, d] = date.split('-').map(Number)
+    const safeDate = new Date(Date.UTC(y, m - 1, d))
+    return safeDate.toLocaleDateString('en-US', opts)
+  }
+  // Otherwise treat as regular Date object
   return new Date(date).toLocaleDateString('en-US', opts)
 }
 function getDayOfWeekIdx(date) {
