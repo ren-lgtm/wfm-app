@@ -99,8 +99,29 @@ function getDayOfWeekIdx(date) {
 function isoStr(date) { return toISODate(date) }
 
 // For a date, get the slot map from schedule[agentId][dayOffset]
+// monday is a PT-anchored YYYY-MM-DD string; targetDate is a Date object.
+// We compute day offset using Date.UTC() to avoid new Date(string) parsing as UTC.
 function getSlotsForDate(schedule, agentId, monday, targetDate) {
-  const dayIdx = Math.round((new Date(targetDate) - new Date(monday)) / 86400000)
+  // Parse YYYY-MM-DD strings and Date objects consistently as local calendar dates
+  const toYMD = (d) => {
+    if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+    const dt = new Date(d)
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const day = String(dt.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  const mondayYMD = toYMD(monday)
+  const targetYMD = toYMD(targetDate)
+
+  // Parse YYYY-MM-DD to components and compute day offset using UTC (timezone-safe for dates)
+  const [my, mm, md] = mondayYMD.split('-').map(Number)
+  const [ty, tm, td] = targetYMD.split('-').map(Number)
+  const mondayMs = Date.UTC(my, mm - 1, md)
+  const targetMs = Date.UTC(ty, tm - 1, td)
+  const dayIdx = Math.round((targetMs - mondayMs) / 86400000)
+
   if (dayIdx < 0 || dayIdx > 6) return {}
   return schedule[agentId]?.[dayIdx] || {}
 }
