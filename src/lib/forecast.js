@@ -200,25 +200,28 @@ export function getDayOfWeek(date) {
 }
 
 export function getMondayOfWeek(date) {
-  // Always compute "today" in PT to get a consistent week for all users
-  const ptDateStr = new Date(date || Date.now()).toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-  // ptDateStr is "MM/DD/YYYY"
-  const [month, day, year] = ptDateStr.split('/').map(Number)
-  // Build a local date using PT's Y/M/D to avoid any further tz shifts
-  const ptDate = new Date(year, month - 1, day)
-  const dayOfWeek = ptDate.getDay() // 0=Sun, 1=Mon...
-  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // shift to Monday
-  const monday = new Date(ptDate)
-  monday.setDate(ptDate.getDate() + diff)
-  const y = monday.getFullYear()
-  const m = String(monday.getMonth() + 1).padStart(2, '0')
-  const d = String(monday.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  let y, m, d
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    // Parse YYYY-MM-DD string components directly — never use new Date("YYYY-MM-DD")
+    ;[y, m, d] = date.split('-').map(Number)
+  } else {
+    // For Date objects or timestamps, use PT timezone
+    const ptStr = new Date(date || Date.now()).toLocaleDateString('en-US', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    })
+    const parts = ptStr.split('/')
+    m = Number(parts[0]); d = Number(parts[1]); y = Number(parts[2])
+  }
+  // Use Date.UTC to compute day of week safely
+  const utcDate = new Date(Date.UTC(y, m - 1, d))
+  const dow = utcDate.getUTCDay() // 0=Sun, 1=Mon...
+  const diff = dow === 0 ? -6 : 1 - dow
+  const monday = new Date(Date.UTC(y, m - 1, d + diff))
+  const ry = monday.getUTCFullYear()
+  const rm = String(monday.getUTCMonth() + 1).padStart(2, '0')
+  const rd = String(monday.getUTCDate()).padStart(2, '0')
+  return `${ry}-${rm}-${rd}`
 }
 
 export function formatWeekLabel(monday) {
