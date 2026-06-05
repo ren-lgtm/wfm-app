@@ -86,6 +86,15 @@ const GAP_STATUS = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Safely parse YYYY-MM-DD strings (PT-anchored) without UTC timezone shift
+function parsePTDate(str) {
+  if (typeof str === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d))
+  }
+  return new Date(str)
+}
+
 function addDays(dateStr, days) {
   // dateStr is a YYYY-MM-DD string (PT-anchored). Never parse through new Date(string).
   // Instead, parse components and use Date.UTC for timezone-safe arithmetic.
@@ -97,17 +106,10 @@ function addDays(dateStr, days) {
   return `${ry}-${rm}-${rd}`  // return PT-anchored YYYY-MM-DD string
 }
 function formatDate(date, opts) {
-  // If date is a YYYY-MM-DD string (PT-anchored), parse it safely without UTC shift
-  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    const [y, m, d] = date.split('-').map(Number)
-    const safeDate = new Date(Date.UTC(y, m - 1, d))
-    return safeDate.toLocaleDateString('en-US', opts)
-  }
-  // Otherwise treat as regular Date object
-  return new Date(date).toLocaleDateString('en-US', opts)
+  return parsePTDate(date).toLocaleDateString('en-US', opts)
 }
 function getDayOfWeekIdx(date) {
-  const d = new Date(date).getDay()
+  const d = parsePTDate(date).getDay()
   return d === 0 ? 6 : d - 1
 }
 function isoStr(date) { return toISODate(date) }
@@ -151,7 +153,7 @@ function getCurrentPtHour() {
 
 // Determine if a (date, hour) is in the past, current, or future relative to now
 function hourStatus(date, hour) {
-  const d = new Date(date)
+  const d = parsePTDate(date)
   d.setHours(0, 0, 0, 0)
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
 
@@ -312,7 +314,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
     onClose()
   }
 
-  const dateLabel = new Date(date).toLocaleDateString('en-US', {
+  const dateLabel = parsePTDate(date).toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
 
@@ -469,7 +471,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const isTemplate = !hasDayData && !!templateSchedule && !isSameWeek
   const effectiveSchedule = isTemplate ? templateSchedule : schedule
   const effectiveMonday   = isTemplate
-    ? new Date(templateWeekStart + 'T00:00:00') // treat template monday as anchor
+    ? parsePTDate(templateWeekStart) // treat template monday as anchor
     : monday
 
   // For the template: we want the same day-of-week (0-6), not offset from today's monday.
@@ -663,7 +665,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
 
   // Template banner text
   const templateBanner = isTemplate && templateWeekStart
-    ? `Showing last saved schedule (week of ${new Date(templateWeekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}) as template — no schedule saved for this date yet`
+    ? `Showing last saved schedule (week of ${parsePTDate(templateWeekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}) as template — no schedule saved for this date yet`
     : null
 
   return (
@@ -1756,7 +1758,7 @@ export default function TimelineView({
 
   // Month date
   const monthDate = useMemo(() => {
-    const d = new Date(todayPT)
+    const d = parsePTDate(todayPT)
     d.setMonth(d.getMonth() + monthOffset)
     return d
   }, [monthOffset, todayPT])
@@ -1783,14 +1785,14 @@ export default function TimelineView({
       const dow = DAYS_SHORT[getDayOfWeekIdx(selectedDate)]
       dows = WEEKDAYS.includes(dow) ? [dow] : []
       label = formatDate(selectedDate, { weekday: 'short', month: 'short', day: 'numeric' })
-      startDate = new Date(selectedDate)
-      endDate   = new Date(selectedDate)
+      startDate = parsePTDate(selectedDate)
+      endDate   = parsePTDate(selectedDate)
 
     } else if (viewMode === 'week') {
       dows = [...WEEKDAYS]
       label = `${formatDate(weekMonday, { month: 'short', day: 'numeric' })} – ${formatDate(addDays(weekMonday, 4), { month: 'short', day: 'numeric' })}`
-      startDate = new Date(weekMonday)
-      endDate   = addDays(weekMonday, 6)
+      startDate = parsePTDate(weekMonday)
+      endDate   = parsePTDate(addDays(weekMonday, 6))
 
     } else if (viewMode === 'month') {
       const yr = monthDate.getFullYear()
