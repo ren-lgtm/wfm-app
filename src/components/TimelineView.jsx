@@ -145,8 +145,15 @@ function getSlotsForDate(schedule, agentId, monday, targetDate) {
   const targetMs = Date.UTC(ty, tm - 1, td)
   const dayIdx = Math.round((targetMs - mondayMs) / 86400000)
 
-  if (dayIdx < 0 || dayIdx > 6) return {}
-  return schedule[agentId]?.[dayIdx] || {}
+  if (dayIdx < 0 || dayIdx > 6) {
+    console.warn('[getSlotsForDate] Out of range dayIdx:', { dayIdx, mondayYMD, targetYMD })
+    return {}
+  }
+  const slots = schedule[agentId]?.[dayIdx]
+  if (!slots) {
+    console.log('[getSlotsForDate] No slots found:', { agentId, dayIdx, targetYMD, agentKeys: Object.keys(schedule[agentId] || {}) })
+  }
+  return slots || {}
 }
 
 // Returns the current hour in PT (0–23), derived from ET via Intl API.
@@ -571,7 +578,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     }
   }, [drag, canEditAny, agentSlots])
 
-  const handlePointerUp = useCallback((e) => {
+  const handlePointerUp = useCallback(async (e) => {
     if (!drag || !canEditAny) return
     const { type, agentId, dow: d, origStart, origEnd, activity, previewStart, previewEnd, conflict, edge } = drag
     if (conflict) return
@@ -612,13 +619,13 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
       }
     }
 
-    // Clear drag preview first
-    setDrag(null)
+    // Make all the updates and wait a bit for reload before clearing preview
+    // This ensures the new data arrives before we clear the drag state
+    const promises = updates.map(({ h, activity: act }) => updateSlot(agentId, d, h, act))
+    await Promise.all(promises)
 
-    // Make the updates (fire and forget - updateSlot will reload the schedule)
-    for (const { h, activity: act } of updates) {
-      updateSlot(agentId, d, h, act)
-    }
+    // Now clear the drag preview
+    setDrag(null)
   }, [drag, canEditAny, updateSlot])
 
   const openShiftModal = (agent, h, slots) => {
@@ -1779,6 +1786,7 @@ export default function TimelineView({
         converted[agent.id][di] = slots ? { ...slots } : {}
       })
     }
+    console.log('[TimelineView.schedule] Created schedule with', agents.length, 'agents,', Object.values(liveSchedule || {}).reduce((c, a) => c + Object.values(a).filter(s => Object.keys(s).length > 0).length, 0), 'days with data')
     return converted
   }, [hasLiveData, liveSchedule, agents])
 
