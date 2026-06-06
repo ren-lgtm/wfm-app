@@ -287,14 +287,14 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                 {DAYS_SHORT.map(day => (
                   <th
                     key={day}
-                    className="text-center px-2 py-3 bg-[#0C0F14] border-r border-[#2A3245]"
+                    className="text-center px-2 py-1.5 bg-[#0C0F14] border-r border-[#2A3245]"
                   >
                     <div className="text-xs font-semibold text-white">{day}</div>
                   </th>
                 ))}
               </tr>
               <tr className="border-b border-[#2A3245]">
-                <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-2 border-r border-[#2A3245] text-xs font-semibold text-gray-300">
+                <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-1 border-r border-[#2A3245] text-xs font-semibold text-gray-300">
                   Agent
                 </th>
                 {DAYS_SHORT.map(day => (
@@ -303,8 +303,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                       {hours.map(h => (
                         <div
                           key={h}
-                          className="text-center text-[8px] py-1"
-                          style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W }}
+                          className="text-center text-[8px]"
+                          style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W, padding: '1px 0' }}
                         >
                           <span className="text-gray-500">{hLabel(h).replace('am', 'a').replace('pm', 'p')}</span>
                         </div>
@@ -318,9 +318,9 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
             {/* Agent rows */}
             <tbody>
               {agents.map((agent, agentIdx) => (
-                <tr key={agent.id} className={agentIdx % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                  <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-3 py-2">
-                    <div className="flex items-center gap-2">
+                <tr key={agent.id} style={{ height: 32 }}>
+                  <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-3 py-0">
+                    <div className="flex items-center gap-2 h-full">
                       <div
                         className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
                         style={{ background: agent.color }}
@@ -363,8 +363,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                     const rowBg = agentIdx % 2 === 0 ? 'bg-[#0C0F14]' : 'bg-white/[0.02]'
 
                     return (
-                      <td key={day} className={`border-r border-[#2A3245] p-0 ${rowBg}`} style={{ minWidth: HOUR_COL_W * 24 }}>
-                        <div className="flex relative" style={{ minHeight: 48 }}>
+                      <td key={day} className={`border-r border-[#2A3245] p-0 ${rowBg}`} style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
+                        <div className="flex relative w-full h-full">
                           {/* Empty cells */}
                           {runs.map(({ startH, endH, activity, span }) => {
                             if (activity) return null
@@ -388,8 +388,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                 key={`shift-${startH}`}
                                 className={`absolute rounded cursor-grab active:cursor-grabbing ${isBeingDragged ? '' : 'hover:brightness-125'}`}
                                 style={{
-                                  top: '4px',
-                                  bottom: '4px',
+                                  top: '2px',
+                                  bottom: '2px',
                                   left: `${startH * HOUR_COL_W}px`,
                                   width: `${span * HOUR_COL_W}px`,
                                   background: shiftType?.color || '#666',
