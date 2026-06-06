@@ -371,8 +371,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                             return (
                               <div
                                 key={`empty-${startH}`}
-                                className="border-r border-[#2A3245] hover:bg-[#2A3245]/20 transition-colors cursor-pointer"
-                                style={{ width: `${HOUR_COL_W * span}px` }}
+                                className="border-r border-[#2A3245] hover:bg-[#2A3245]/20 cursor-pointer"
+                                style={{ width: `${HOUR_COL_W * span}px`, height: '100%' }}
                                 onClick={() => openShiftModal(agent, day, slots, startH)}
                               />
                             )
@@ -393,6 +393,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                   left: `${startH * HOUR_COL_W}px`,
                                   width: `${span * HOUR_COL_W}px`,
                                   background: shiftType?.color || '#666',
+                                  minHeight: '24px',
                                 }}
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
