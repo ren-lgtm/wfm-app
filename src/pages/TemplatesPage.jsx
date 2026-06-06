@@ -190,12 +190,12 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
     return <div className="text-gray-400 text-center py-8">Select or create a template to edit</div>
   }
 
-  const clientXToHour = useCallback((clientX) => {
+  const clientXToHour = (clientX) => {
     if (!containerRef.current) return null
     const rect = containerRef.current.getBoundingClientRect()
     const x = clientX - rect.left + containerRef.current.scrollLeft - 140
     return Math.max(0, Math.min(23, Math.floor(x / HOUR_COL_W)))
-  }, [])
+  }
 
   const handlePointerMove = useCallback((e) => {
     setDrag(currentDrag => {
@@ -222,7 +222,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
         }
       }
     })
-  }, [clientXToHour])
+  }, [])
 
   const handlePointerUp = useCallback((e) => {
     const currentDrag = dragRef.current
