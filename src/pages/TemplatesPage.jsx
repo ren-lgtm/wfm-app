@@ -173,7 +173,8 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
 
 function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const [shiftModal, setShiftModal] = useState(null)
-  const hours = Array.from({ length: WORK_END - WORK_START }, (_, i) => i + WORK_START)
+  // Show full 24-hour day (PT): 12am-11pm
+  const hours = Array.from({ length: 24 }, (_, i) => i)
 
   if (!template) {
     return <div className="text-gray-400 text-center py-8">Select or create a template to edit</div>
@@ -189,13 +190,13 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
         <div className="overflow-x-auto">
           <table
             className="text-[10px] border-collapse w-full"
-            style={{ minWidth: `140px + ${DAYS_SHORT.length * (HOUR_COL_W * (WORK_END - WORK_START) + 40)}px` }}
+            style={{ minWidth: `140px + ${DAYS_SHORT.length * (HOUR_COL_W * 24 + 40)}px` }}
           >
             {/* Column widths */}
             <colgroup>
               <col style={{ width: 140, minWidth: 140 }} />
               {DAYS_SHORT.map(day => (
-                <col key={day} style={{ width: `${HOUR_COL_W * (WORK_END - WORK_START) + 40}px` }} />
+                <col key={day} style={{ width: `${HOUR_COL_W * 24 + 40}px` }} />
               ))}
             </colgroup>
 
