@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ChevronRight, Copy, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CustomRangePicker } from '../components/CustomRangePicker'
@@ -169,10 +169,14 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
   )
 }
 
-// ─── Week template grid editor (like DayView but showing all 5 days) ───
+// ─── Week template grid editor (like DayView with draggable blocks) ───
 
 function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const [shiftModal, setShiftModal] = useState(null)
+  const [drag, setDrag] = useState(null)
+  const containerRef = useRef(null)
+  const justDragged = useRef(false)
+
   // Show full 24-hour day (PT): 12am-11pm
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
@@ -180,26 +184,93 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
     return <div className="text-gray-400 text-center py-8">Select or create a template to edit</div>
   }
 
-  const openShiftModal = (agent, day, slots) => {
-    setShiftModal({ agent, day, slots })
+  const clientXToHour = (clientX) => {
+    if (!containerRef.current) return null
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = clientX - rect.left + containerRef.current.scrollLeft - 140
+    return Math.max(0, Math.min(23, Math.floor(x / HOUR_COL_W)))
+  }
+
+  const handlePointerMove = useCallback((e) => {
+    if (!drag) return
+    const h = clientXToHour(e.clientX)
+    if (h === null) return
+
+    if (drag.type === 'move') {
+      const len = drag.origEnd - drag.origStart
+      const newStart = Math.max(0, Math.min(23 - len, h - drag.offsetH))
+      const newEnd = newStart + len
+      setDrag(d => ({
+        ...d,
+        previewStart: newStart,
+        previewEnd: newEnd,
+      }))
+    } else {
+      if (drag.edge === 'right') {
+        const newEnd = Math.max(drag.origStart, Math.min(23, h))
+        setDrag(d => ({ ...d, previewEnd: newEnd }))
+      } else {
+        const newStart = Math.min(drag.origEnd, Math.max(0, h))
+        setDrag(d => ({ ...d, previewStart: newStart }))
+      }
+    }
+  }, [drag])
+
+  const handlePointerUp = useCallback((e) => {
+    if (!drag) return
+    const { type, agentId, day, origStart, origEnd, activity, previewStart, previewEnd, edge } = drag
+    setDrag(null)
+
+    justDragged.current = true
+    setTimeout(() => { justDragged.current = false }, 150)
+
+    if (type === 'move') {
+      for (let h = origStart; h <= origEnd; h++) {
+        if (h < previewStart || h > previewEnd) {
+          onUpdateSlot(agentId, day, h, null)
+        }
+      }
+      for (let h = previewStart; h <= previewEnd; h++) {
+        if (h < origStart || h > origEnd) {
+          onUpdateSlot(agentId, day, h, activity)
+        }
+      }
+    } else {
+      if (edge === 'right') {
+        if (previewEnd > origEnd) {
+          for (let h = origEnd + 1; h <= previewEnd; h++) onUpdateSlot(agentId, day, h, activity)
+        } else {
+          for (let h = previewEnd + 1; h <= origEnd; h++) onUpdateSlot(agentId, day, h, null)
+        }
+      } else {
+        if (previewStart < origStart) {
+          for (let h = previewStart; h < origStart; h++) onUpdateSlot(agentId, day, h, activity)
+        } else {
+          for (let h = origStart; h < previewStart; h++) onUpdateSlot(agentId, day, h, null)
+        }
+      }
+    }
+  }, [drag, onUpdateSlot])
+
+  const openShiftModal = (agent, day, slots, startH) => {
+    if (justDragged.current) return
+    setShiftModal({ agent, day, clickedHour: startH, agentSlots: slots })
   }
 
   return (
     <>
-      <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+      <div
+        className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden"
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={() => setDrag(null)}
+        style={drag ? { userSelect: 'none' } : undefined}
+      >
+        <div className="overflow-x-auto" ref={containerRef}>
           <table
             className="text-[10px] border-collapse w-full"
-            style={{ minWidth: `140px + ${DAYS_SHORT.length * (HOUR_COL_W * 24 + 40)}px` }}
+            style={{ minWidth: `140px + ${DAYS_SHORT.length * (HOUR_COL_W * 24)}px` }}
           >
-            {/* Column widths */}
-            <colgroup>
-              <col style={{ width: 140, minWidth: 140 }} />
-              {DAYS_SHORT.map(day => (
-                <col key={day} style={{ width: `${HOUR_COL_W * 24 + 40}px` }} />
-              ))}
-            </colgroup>
-
             {/* Header */}
             <thead>
               <tr className="border-b border-[#2A3245]">
@@ -223,7 +294,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                       {hours.map(h => (
                         <div
                           key={h}
-                          className="text-center text-[9px] py-1"
+                          className="text-center text-[8px] py-1"
                           style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W }}
                         >
                           <span className="text-gray-500">{hLabel(h).replace('am', 'a').replace('pm', 'p')}</span>
@@ -247,37 +318,126 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                       >
                         {agent.name[0]}
                       </div>
-                      <span className="text-xs font-medium text-gray-300">{agent.name}</span>
+                      <span className="text-xs font-medium text-gray-300 whitespace-nowrap">{agent.name}</span>
                     </div>
                   </td>
 
                   {DAYS_SHORT.map(day => {
                     const slots = template.slots?.[agent.id]?.[day] || {}
-                    return (
-                      <td
-                        key={day}
-                        className="border-r border-[#2A3245] p-0"
-                      >
-                        <div className="flex h-16" style={{ minHeight: 64 }}>
-                          {hours.map(h => {
-                            const activity = slots[h] || null
-                            const shiftType = shiftTypes?.find(t => t.id === activity)
-                            const color = shiftType?.color || '#4B5563'
+                    const isBeingDragged = drag && drag.agentId === agent.id && drag.day === day
 
+                    // Build runs of contiguous activities
+                    const runs = []
+                    let i = 0
+                    while (i < 24) {
+                      const h = i
+                      const act = isBeingDragged ? null : (slots[h] || null)
+                      if (!act) {
+                        runs.push({ startH: h, endH: h, activity: null, span: 1 })
+                        i++
+                      } else {
+                        let j = i + 1
+                        while (j < 24 && slots[j] === act) j++
+                        runs.push({ startH: h, endH: j - 1, activity: act, span: j - i })
+                        i = j
+                      }
+                    }
+
+                    // Show preview if dragging
+                    if (isBeingDragged) {
+                      const previewRuns = []
+                      for (let h = drag.previewStart; h <= drag.previewEnd; h++) {
+                        previewRuns.push({ h, activity: drag.activity })
+                      }
+                    }
+
+                    return (
+                      <td key={day} className="border-r border-[#2A3245] p-1" style={{ minWidth: HOUR_COL_W * 24 }}>
+                        <div className="flex h-20 relative" style={{ minHeight: 80 }}>
+                          {/* Empty cells */}
+                          {runs.map(({ startH, endH, activity, span }) => {
+                            if (activity) return null
                             return (
                               <div
-                                key={h}
-                                className="border-r border-[#2A3245] cursor-pointer hover:bg-[#2A3245]/30 transition-colors flex items-center justify-center text-[8px] font-medium"
-                                style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W }}
-                                onClick={() => openShiftModal(agent, day, slots)}
-                                title={activity ? `${agent.name} ${day} ${hLabel(h)}: ${shiftType?.name || activity}` : 'Click to add shift'}
+                                key={`empty-${startH}`}
+                                className="border-r border-[#2A3245] hover:bg-[#2A3245]/20 transition-colors cursor-pointer"
+                                style={{ width: `${HOUR_COL_W * span}px` }}
+                                onClick={() => openShiftModal(agent, day, slots, startH)}
+                              />
+                            )
+                          })}
+
+                          {/* Shift blocks */}
+                          {runs.map(({ startH, endH, activity, span }) => {
+                            if (!activity) return null
+                            const shiftType = shiftTypes?.find(t => t.id === activity)
+                            const label = shiftType?.name || activity
+                            return (
+                              <div
+                                key={`shift-${startH}`}
+                                className="absolute top-1 bottom-1 rounded cursor-grab active:cursor-grabbing transition-all hover:brightness-125"
+                                style={{
+                                  left: `${startH * HOUR_COL_W}px`,
+                                  width: `${span * HOUR_COL_W}px`,
+                                  background: shiftType?.color || '#666',
+                                }}
+                                onPointerDown={(e) => {
+                                  e.stopPropagation()
+                                  const h = clientXToHour(e.clientX)
+                                  setDrag({
+                                    type: 'move',
+                                    agentId: agent.id,
+                                    day,
+                                    origStart: startH,
+                                    origEnd: endH,
+                                    activity,
+                                    offsetH: h !== null ? h - startH : 0,
+                                    previewStart: startH,
+                                    previewEnd: endH,
+                                  })
+                                }}
+                                onClick={() => openShiftModal(agent, day, slots, startH)}
                               >
-                                {activity && (
-                                  <div
-                                    className="w-2 h-2 rounded-full"
-                                    style={{ background: color }}
-                                  />
-                                )}
+                                {/* Left resize handle */}
+                                <div
+                                  className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-white/30 rounded-l"
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation()
+                                    setDrag({
+                                      type: 'resize',
+                                      edge: 'left',
+                                      agentId: agent.id,
+                                      day,
+                                      origStart: startH,
+                                      origEnd: endH,
+                                      activity,
+                                      previewStart: startH,
+                                      previewEnd: endH,
+                                    })
+                                  }}
+                                />
+                                {/* Label */}
+                                <div className="text-[9px] font-medium text-white px-1 leading-tight select-none pointer-events-none">
+                                  {label}
+                                </div>
+                                {/* Right resize handle */}
+                                <div
+                                  className="absolute right-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-white/30 rounded-r"
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation()
+                                    setDrag({
+                                      type: 'resize',
+                                      edge: 'right',
+                                      agentId: agent.id,
+                                      day,
+                                      origStart: startH,
+                                      origEnd: endH,
+                                      activity,
+                                      previewStart: startH,
+                                      previewEnd: endH,
+                                    })
+                                  }}
+                                />
                               </div>
                             )
                           })}
@@ -296,8 +456,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
         <ShiftModal
           agent={shiftModal.agent}
           dow={shiftModal.day}
-          clickedHour={0}
-          agentSlots={shiftModal.slots}
+          clickedHour={shiftModal.clickedHour}
+          agentSlots={shiftModal.agentSlots}
           updateSlot={onUpdateSlot}
           shiftTypes={shiftTypes}
           onClose={() => setShiftModal(null)}
