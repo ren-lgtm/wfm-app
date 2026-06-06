@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronRight, Copy, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Copy, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CustomRangePicker } from '../components/CustomRangePicker'
 import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
-import { hLabel, getMondayOfWeek, toISODate, DAYS } from '../lib/forecast'
+import { hLabel, getMondayOfWeek, toISODate, DAYS, WORK_START, WORK_END } from '../lib/forecast'
 
-const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const DAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+const DAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+const HOUR_COL_W = 48
 
 // ─── Modal for editing a shift in the template ───
 
@@ -168,34 +169,76 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
   )
 }
 
-// ─── Template grid editor ───
+// ─── Week template grid editor (like DayView but showing all 5 days) ───
 
-function TemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
+function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const [shiftModal, setShiftModal] = useState(null)
+  const hours = Array.from({ length: WORK_END - WORK_START }, (_, i) => i + WORK_START)
 
   if (!template) {
     return <div className="text-gray-400 text-center py-8">Select or create a template to edit</div>
+  }
+
+  const openShiftModal = (agent, day, slots) => {
+    setShiftModal({ agent, day, slots })
   }
 
   return (
     <>
       <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table
+            className="text-[10px] border-collapse w-full"
+            style={{ minWidth: `140px + ${DAYS_SHORT.length * (HOUR_COL_W * (WORK_END - WORK_START) + 40)}px` }}
+          >
+            {/* Column widths */}
+            <colgroup>
+              <col style={{ width: 140, minWidth: 140 }} />
+              {DAYS_SHORT.map(day => (
+                <col key={day} style={{ width: `${HOUR_COL_W * (WORK_END - WORK_START) + 40}px` }} />
+              ))}
+            </colgroup>
+
+            {/* Header */}
             <thead>
               <tr className="border-b border-[#2A3245]">
-                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-300 w-28">Agent</th>
+                <th className="sticky left-0 z-20 bg-[#141922] border-r border-[#2A3245]" />
                 {DAYS_SHORT.map(day => (
-                  <th key={day} className="text-center px-2 py-2 text-xs font-semibold text-gray-400 w-20">
-                    {day}
+                  <th
+                    key={day}
+                    className="text-center px-2 py-3 bg-[#0C0F14] border-r border-[#2A3245]"
+                  >
+                    <div className="text-xs font-semibold text-white">{day}</div>
+                  </th>
+                ))}
+              </tr>
+              <tr className="border-b border-[#2A3245]">
+                <th className="sticky left-0 z-20 bg-[#141922] text-left px-4 py-2 border-r border-[#2A3245] text-xs font-semibold text-gray-300">
+                  Agent
+                </th>
+                {DAYS_SHORT.map(day => (
+                  <th key={day} className="bg-[#0C0F14] border-r border-[#2A3245] p-0">
+                    <div className="flex border-b border-[#2A3245]">
+                      {hours.map(h => (
+                        <div
+                          key={h}
+                          className="text-center text-[9px] py-1"
+                          style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W }}
+                        >
+                          <span className="text-gray-500">{hLabel(h).replace('am', 'a').replace('pm', 'p')}</span>
+                        </div>
+                      ))}
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
+
+            {/* Agent rows */}
             <tbody>
-              {agents.map((agent, idx) => (
-                <tr key={agent.id} className={idx % 2 === 0 ? '' : 'bg-white/[0.02]'}>
-                  <td className="px-4 py-2">
+              {agents.map((agent, agentIdx) => (
+                <tr key={agent.id} className={agentIdx % 2 === 0 ? '' : 'bg-white/[0.02]'}>
+                  <td className="sticky left-0 z-10 bg-[#141922] border-r border-[#2A3245] px-3 py-2">
                     <div className="flex items-center gap-2">
                       <div
                         className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
@@ -203,19 +246,41 @@ function TemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                       >
                         {agent.name[0]}
                       </div>
-                      <span className="text-xs text-gray-300 font-medium">{agent.name}</span>
+                      <span className="text-xs font-medium text-gray-300">{agent.name}</span>
                     </div>
                   </td>
+
                   {DAYS_SHORT.map(day => {
                     const slots = template.slots?.[agent.id]?.[day] || {}
-                    const hoursStr = Object.keys(slots).length > 0 ? `${Object.keys(slots).length}h` : '—'
                     return (
                       <td
                         key={day}
-                        className="px-2 py-2 text-center cursor-pointer hover:bg-[#2A3245]/30 transition-colors rounded"
-                        onClick={() => setShiftModal({ agent, day, slots })}
+                        className="border-r border-[#2A3245] p-0"
                       >
-                        <span className="text-xs font-mono text-gray-400">{hoursStr}</span>
+                        <div className="flex h-16" style={{ minHeight: 64 }}>
+                          {hours.map(h => {
+                            const activity = slots[h] || null
+                            const shiftType = shiftTypes?.find(t => t.id === activity)
+                            const color = shiftType?.color || '#4B5563'
+
+                            return (
+                              <div
+                                key={h}
+                                className="border-r border-[#2A3245] cursor-pointer hover:bg-[#2A3245]/30 transition-colors flex items-center justify-center text-[8px] font-medium"
+                                style={{ width: HOUR_COL_W, minWidth: HOUR_COL_W }}
+                                onClick={() => openShiftModal(agent, day, slots)}
+                                title={activity ? `${agent.name} ${day} ${hLabel(h)}: ${shiftType?.name || activity}` : 'Click to add shift'}
+                              >
+                                {activity && (
+                                  <div
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ background: color }}
+                                  />
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
                       </td>
                     )
                   })}
@@ -501,11 +566,11 @@ export default function TemplatesPage({ agents, shiftTypes }) {
         </div>
       )}
 
-      {/* Grid editor */}
+      {/* Week grid editor */}
       {loading ? (
         <div className="text-gray-400 text-center py-8">Loading...</div>
       ) : (
-        <TemplateGrid
+        <WeekTemplateGrid
           template={templateData}
           agents={agents}
           shiftTypes={shiftTypes}
