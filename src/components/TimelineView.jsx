@@ -115,9 +115,26 @@ function formatDate(date, opts) {
   }
   return new Date(date).toLocaleDateString('en-US', opts)
 }
-function getDayOfWeekIdx(date) {
-  const d = parsePTDate(date).getDay()
-  return d === 0 ? 6 : d - 1
+// Calculate day of week index (0=Mon, 6=Sun) from a YYYY-MM-DD string
+// Uses date arithmetic instead of getDay() to avoid timezone issues
+function getDayOfWeekIdx(dateStr) {
+  if (typeof dateStr !== 'string') return 0
+  const [y, m, d] = dateStr.split('-').map(Number)
+
+  // Use Zeller's congruence to find day of week
+  // Adjusted for Monday=0 instead of Sunday=0
+  let month = m, year = y
+  if (month < 3) {
+    month += 12
+    year -= 1
+  }
+  const q = d
+  const k = year % 100
+  const j = Math.floor(year / 100)
+  const h = (q + Math.floor(13 * (month + 1) / 5) + k + Math.floor(k / 4) + Math.floor(j / 4) - 2 * j) % 7
+  // h: 0=Sat, 1=Sun, 2=Mon, ..., 6=Fri
+  // Convert to: 0=Mon, 1=Tue, ..., 6=Sun
+  return (h + 5) % 7
 }
 function isoStr(date) { return toISODate(date) }
 
