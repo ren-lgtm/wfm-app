@@ -174,8 +174,14 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
 function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const [shiftModal, setShiftModal] = useState(null)
   const [drag, setDrag] = useState(null)
+  const dragRef = useRef(null)
   const containerRef = useRef(null)
   const justDragged = useRef(false)
+
+  // Keep dragRef in sync with drag state
+  useEffect(() => {
+    dragRef.current = drag
+  }, [drag])
 
   // Show full 24-hour day (PT): 12am-11pm
   const hours = Array.from({ length: 24 }, (_, i) => i)
@@ -192,33 +198,36 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   }
 
   const handlePointerMove = useCallback((e) => {
-    if (!drag) return
-    const h = clientXToHour(e.clientX)
-    if (h === null) return
+    setDrag(currentDrag => {
+      if (!currentDrag) return null
+      const h = clientXToHour(e.clientX)
+      if (h === null) return currentDrag
 
-    if (drag.type === 'move') {
-      const len = drag.origEnd - drag.origStart
-      const newStart = Math.max(0, Math.min(23 - len, h - drag.offsetH))
-      const newEnd = newStart + len
-      setDrag(d => ({
-        ...d,
-        previewStart: newStart,
-        previewEnd: newEnd,
-      }))
-    } else {
-      if (drag.edge === 'right') {
-        const newEnd = Math.max(drag.origStart, Math.min(23, h))
-        setDrag(d => ({ ...d, previewEnd: newEnd }))
+      if (currentDrag.type === 'move') {
+        const len = currentDrag.origEnd - currentDrag.origStart
+        const newStart = Math.max(0, Math.min(23 - len, h - currentDrag.offsetH))
+        const newEnd = newStart + len
+        return {
+          ...currentDrag,
+          previewStart: newStart,
+          previewEnd: newEnd,
+        }
       } else {
-        const newStart = Math.min(drag.origEnd, Math.max(0, h))
-        setDrag(d => ({ ...d, previewStart: newStart }))
+        if (currentDrag.edge === 'right') {
+          const newEnd = Math.max(currentDrag.origStart, Math.min(23, h))
+          return { ...currentDrag, previewEnd: newEnd }
+        } else {
+          const newStart = Math.min(currentDrag.origEnd, Math.max(0, h))
+          return { ...currentDrag, previewStart: newStart }
+        }
       }
-    }
-  }, [drag])
+    })
+  }, [])
 
   const handlePointerUp = useCallback((e) => {
-    if (!drag) return
-    const { type, agentId, day, origStart, origEnd, activity, previewStart, previewEnd, edge } = drag
+    const currentDrag = dragRef.current
+    if (!currentDrag) return
+    const { type, agentId, day, origStart, origEnd, activity, previewStart, previewEnd, edge } = currentDrag
     setDrag(null)
 
     justDragged.current = true
@@ -250,7 +259,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
         }
       }
     }
-  }, [drag, onUpdateSlot])
+  }, [onUpdateSlot])
 
   const openShiftModal = (agent, day, slots, startH) => {
     if (justDragged.current) return
