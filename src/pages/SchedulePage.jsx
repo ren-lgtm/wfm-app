@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   ChevronLeft, ChevronRight, ChevronDown,
-  Users, BarChart2, Calendar,
+  Users, BarChart2, Calendar, LayoutTemplate,
   GitBranch, TrendingUp, Clock, Target, Settings, LogOut,
 } from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
@@ -10,6 +10,7 @@ import { ForecastChart } from '../components/ForecastChart'
 import TimelineView from '../components/TimelineView'
 import UsersPage from './UsersPage'
 import SettingsPage from './SettingsPage'
+import TemplatesPage from './TemplatesPage'
 import { DAYS, formatWeekLabel } from '../lib/forecast'
 import { usePeriodKPIs } from '../hooks/usePeriodKPIs'
 import { useVolumeTotals } from '../hooks/useVolumeTotals'
@@ -31,7 +32,8 @@ const NAV = [
     label: 'Schedule',
     icon: Calendar,
     children: [
-      { id: 'timeline',  label: 'Timeline',    icon: GitBranch },
+      { id: 'timeline',   label: 'Timeline',   icon: GitBranch },
+      { id: 'templates',  label: 'Templates',  icon: LayoutTemplate },
     ],
   },
   {
@@ -249,6 +251,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
                   <div className="mt-0.5 ml-3 pl-3 border-l border-[#2A3245] space-y-0.5 pb-1">
                     {item.children.map(child => {
                       const CIcon = child.icon
+                      // Gate templates view to admins only
+                      if (child.id === 'templates' && role !== 'admin') return null
                       return (
                         <button
                           key={child.id}
@@ -410,6 +414,11 @@ export default function SchedulePage({ theme, toggleTheme }) {
               emailForecast={forecast.emailForecast}
               slaData={slaData}
             />
+          )}
+
+          {/* ── TEMPLATES ── */}
+          {activeView === 'templates' && role === 'admin' && (
+            <TemplatesPage agents={agents} shiftTypes={shiftTypes} />
           )}
 
           {/* ── USERS ── */}

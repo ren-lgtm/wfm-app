@@ -1,0 +1,602 @@
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ChevronRight, Copy, Plus, Trash2 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { CustomRangePicker } from '../components/CustomRangePicker'
+import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
+import { hLabel, getMondayOfWeek, toISODate, DAYS } from '../lib/forecast'
+
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+// ─── Modal for editing a shift in the template ───
+
+function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftTypes, onClose }) {
+  const existingActivity = agentSlots[clickedHour]
+  const isEditing = !!existingActivity && existingActivity !== 'off'
+
+  const { blockStart, blockEnd } = useMemo(() => {
+    if (!isEditing) return { blockStart: clickedHour, blockEnd: clickedHour }
+    const act = agentSlots[clickedHour]
+    let start = clickedHour, end = clickedHour
+    while (start > 0 && agentSlots[start - 1] === act) start--
+    while (end < 23 && agentSlots[end + 1] === act) end++
+    return { blockStart: start, blockEnd: end }
+  }, [isEditing, clickedHour, agentSlots])
+
+  const [channel, setChannel] = useState(() => {
+    if (isEditing && shiftTypes?.find(t => t.id === existingActivity)) return existingActivity
+    const defaultType = shiftTypes?.find(t => t.id === (agent.default_channel || 'email'))
+    return defaultType?.id ?? shiftTypes?.[0]?.id ?? 'email'
+  })
+  const [startHour, setStartHour] = useState(blockStart)
+  const [endHour, setEndHour] = useState(blockEnd)
+
+  const handleSave = () => {
+    if (isEditing) {
+      for (let h = blockStart; h <= blockEnd; h++) {
+        if (h < startHour || h > endHour) {
+          updateSlot(agent.id, dow, h, null)
+        }
+      }
+    }
+    for (let h = startHour; h <= endHour; h++) {
+      updateSlot(agent.id, dow, h, channel)
+    }
+    onClose()
+  }
+
+  const handleDelete = () => {
+    for (let h = blockStart; h <= blockEnd; h++) {
+      updateSlot(agent.id, dow, h, null)
+    }
+    onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[#141922] border border-[#2A3245] rounded-xl w-full max-w-sm shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A3245]">
+          <div>
+            <div className="flex items-center gap-2">
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                style={{ background: agent.color }}
+              >
+                {agent.name[0]}
+              </div>
+              <span className="font-semibold text-white text-sm">
+                {isEditing ? 'Edit Shift' : 'Add Shift'}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-0.5">{agent.name} · {dow}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1">
+            <span className="text-xl">×</span>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <label className="block text-xs text-gray-400 mb-2 font-medium">Type</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(shiftTypes || []).map(type => {
+                const selected = channel === type.id
+                return (
+                  <button
+                    key={type.id}
+                    onClick={() => setChannel(type.id)}
+                    style={{
+                      background: selected ? type.color + '33' : type.color + '12',
+                      color: type.color,
+                      borderColor: selected ? type.color + '88' : type.color + '30',
+                    }}
+                    className="px-2 py-2 rounded-lg text-xs font-medium transition-all border truncate"
+                  >
+                    {type.name}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Start time</label>
+              <select
+                value={startHour}
+                onChange={e => {
+                  const h = Number(e.target.value)
+                  setStartHour(h)
+                  if (endHour < h) setEndHour(h)
+                }}
+                className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>{hLabel(h)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">End time</label>
+              <select
+                value={endHour}
+                onChange={e => setEndHour(Number(e.target.value))}
+                className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                {Array.from({ length: 24 }, (_, h) => h)
+                  .filter(h => h >= startHour)
+                  .map(h => (
+                    <option key={h} value={h}>{hLabel(h)}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 border-t border-[#2A3245] flex items-center justify-between">
+          {isEditing ? (
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-lg transition-colors"
+            >
+              Delete shift
+            </button>
+          ) : <div />}
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Template grid editor ───
+
+function TemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
+  const [shiftModal, setShiftModal] = useState(null)
+
+  if (!template) {
+    return <div className="text-gray-400 text-center py-8">Select or create a template to edit</div>
+  }
+
+  return (
+    <>
+      <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-[#2A3245]">
+                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-300 w-28">Agent</th>
+                {DAYS_SHORT.map(day => (
+                  <th key={day} className="text-center px-2 py-2 text-xs font-semibold text-gray-400 w-20">
+                    {day}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {agents.map((agent, idx) => (
+                <tr key={agent.id} className={idx % 2 === 0 ? '' : 'bg-white/[0.02]'}>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                        style={{ background: agent.color }}
+                      >
+                        {agent.name[0]}
+                      </div>
+                      <span className="text-xs text-gray-300 font-medium">{agent.name}</span>
+                    </div>
+                  </td>
+                  {DAYS_SHORT.map(day => {
+                    const slots = template.slots?.[agent.id]?.[day] || {}
+                    const hoursStr = Object.keys(slots).length > 0 ? `${Object.keys(slots).length}h` : '—'
+                    return (
+                      <td
+                        key={day}
+                        className="px-2 py-2 text-center cursor-pointer hover:bg-[#2A3245]/30 transition-colors rounded"
+                        onClick={() => setShiftModal({ agent, day, slots })}
+                      >
+                        <span className="text-xs font-mono text-gray-400">{hoursStr}</span>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {shiftModal && (
+        <ShiftModal
+          agent={shiftModal.agent}
+          dow={shiftModal.day}
+          clickedHour={0}
+          agentSlots={shiftModal.slots}
+          updateSlot={onUpdateSlot}
+          shiftTypes={shiftTypes}
+          onClose={() => setShiftModal(null)}
+        />
+      )}
+    </>
+  )
+}
+
+// ─── Main TemplatesPage ───
+
+export default function TemplatesPage({ agents, shiftTypes }) {
+  const [templates, setTemplates] = useState([])
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
+  const [templateData, setTemplateData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [newTemplateName, setNewTemplateName] = useState('Standard Week')
+
+  // Load templates
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const { data } = await supabase.from('schedule_templates').select('*')
+      setTemplates(data || [])
+      if (data?.length > 0) {
+        setSelectedTemplate(data[0].id)
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  // Load template data when selected template changes
+  useEffect(() => {
+    if (!selectedTemplate) return
+    async function load() {
+      const { data: schedules } = await supabase
+        .from('template_schedules')
+        .select('*, template_slots(*)')
+        .eq('template_id', selectedTemplate)
+
+      const slots = {}
+      for (const sched of (schedules || [])) {
+        if (!slots[sched.agent_id]) slots[sched.agent_id] = {}
+        const daySlots = {}
+        for (const slot of sched.template_slots || []) {
+          daySlots[slot.hour] = slot.activity
+        }
+        slots[sched.agent_id][sched.day_of_week] = sched.is_off ? { off: true } : daySlots
+      }
+
+      setTemplateData({
+        id: selectedTemplate,
+        slots,
+      })
+    }
+    load()
+  }, [selectedTemplate])
+
+  const handleCreateTemplate = async () => {
+    const { data: newTemplate } = await supabase
+      .from('schedule_templates')
+      .insert({ name: newTemplateName })
+      .select()
+      .single()
+
+    if (newTemplate) {
+      setTemplates(prev => [...prev, newTemplate])
+      setSelectedTemplate(newTemplate.id)
+      setShowNewForm(false)
+      setNewTemplateName('Standard Week')
+    }
+  }
+
+  const handleDeleteTemplate = async (templateId) => {
+    if (!confirm('Delete this template?')) return
+    await supabase.from('schedule_templates').delete().eq('id', templateId)
+    setTemplates(prev => prev.filter(t => t.id !== templateId))
+    setSelectedTemplate(null)
+  }
+
+  const handleUpdateSlot = async (agentId, day, hour, activity) => {
+    if (!selectedTemplate) return
+
+    // Upsert template_schedule
+    const { data: sched } = await supabase
+      .from('template_schedules')
+      .upsert({
+        template_id: selectedTemplate,
+        agent_id: agentId,
+        day_of_week: day,
+        is_off: false,
+      }, { onConflict: 'template_id,agent_id,day_of_week' })
+      .select()
+      .single()
+
+    if (!sched) return
+
+    if (activity === null) {
+      await supabase.from('template_slots').delete().eq('template_schedule_id', sched.id).eq('hour', hour)
+    } else {
+      await supabase
+        .from('template_slots')
+        .upsert({ template_schedule_id: sched.id, hour, activity }, { onConflict: 'template_schedule_id,hour' })
+    }
+
+    // Reload template data
+    const { data: schedules } = await supabase
+      .from('template_schedules')
+      .select('*, template_slots(*)')
+      .eq('template_id', selectedTemplate)
+
+    const slots = {}
+    for (const s of (schedules || [])) {
+      if (!slots[s.agent_id]) slots[s.agent_id] = {}
+      const daySlots = {}
+      for (const slot of s.template_slots || []) {
+        daySlots[slot.hour] = slot.activity
+      }
+      slots[s.agent_id][s.day_of_week] = s.is_off ? { off: true } : daySlots
+    }
+
+    setTemplateData({ id: selectedTemplate, slots })
+  }
+
+  const handlePublish = async (startDateStr, endDateStr, overwrite) => {
+    if (!selectedTemplate || !templateData) return
+
+    // Parse dates
+    const [sy, sm, sd] = startDateStr.split('-').map(Number)
+    const [ey, em, ed] = endDateStr.split('-').map(Number)
+    const startDate = new Date(Date.UTC(sy, sm - 1, sd))
+    const endDate = new Date(Date.UTC(ey, em - 1, ed))
+
+    // Find all Mondays in range
+    let current = new Date(startDate)
+    current.setDate(current.getDate() - current.getDay() + 1)  // Move to Monday
+    const mondays = []
+    while (current <= endDate) {
+      const y = current.getUTCFullYear()
+      const m = String(current.getUTCMonth() + 1).padStart(2, '0')
+      const d = String(current.getUTCDate()).padStart(2, '0')
+      mondays.push(`${y}-${m}-${d}`)
+      current.setDate(current.getDate() + 7)
+    }
+
+    let successCount = 0
+
+    for (const mondayStr of mondays) {
+      for (const agentId in templateData.slots) {
+        for (const day of DAYS_SHORT) {
+          const templateSlots = templateData.slots[agentId]?.[day]
+          if (!templateSlots) continue
+
+          // Check if week already has data
+          if (!overwrite) {
+            const { data: existing } = await supabase
+              .from('schedules')
+              .select('id')
+              .eq('week_start', mondayStr)
+              .eq('agent_id', agentId)
+              .eq('day_of_week', day)
+              .single()
+            if (existing) continue
+          }
+
+          // Upsert schedule
+          const { data: sched } = await supabase
+            .from('schedules')
+            .upsert({
+              week_start: mondayStr,
+              agent_id: agentId,
+              day_of_week: day,
+              is_off: templateSlots.off ?? false,
+            }, { onConflict: 'week_start,agent_id,day_of_week' })
+            .select()
+            .single()
+
+          if (!sched) continue
+
+          // Delete old slots
+          await supabase.from('schedule_slots').delete().eq('schedule_id', sched.id)
+
+          // Upsert new slots
+          const slotsToInsert = Object.entries(templateSlots)
+            .filter(([k]) => k !== 'off')
+            .map(([hour, activity]) => ({
+              schedule_id: sched.id,
+              hour: parseInt(hour),
+              activity,
+            }))
+
+          if (slotsToInsert.length > 0) {
+            await supabase.from('schedule_slots').upsert(slotsToInsert, { onConflict: 'schedule_id,hour' })
+          }
+
+          successCount++
+        }
+      }
+    }
+
+    alert(`Published template to ${successCount} agent-days across ${mondays.length} weeks`)
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white mb-1">Templates</h1>
+        <p className="text-sm text-gray-400">Create reusable schedules and publish them to multiple weeks</p>
+      </div>
+
+      {/* Template selector */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <select
+            value={selectedTemplate || ''}
+            onChange={e => setSelectedTemplate(e.target.value)}
+            className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Select a template...</option>
+            {templates.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+        {selectedTemplate && (
+          <button
+            onClick={() => handleDeleteTemplate(selectedTemplate)}
+            className="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-red-950/20 transition-colors"
+            title="Delete template"
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
+        <button
+          onClick={() => setShowNewForm(!showNewForm)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+        >
+          <Plus size={16} /> New
+        </button>
+      </div>
+
+      {/* New template form */}
+      {showNewForm && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newTemplateName}
+            onChange={e => setNewTemplateName(e.target.value)}
+            placeholder="Template name..."
+            className="flex-1 bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={handleCreateTemplate}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors font-medium"
+          >
+            Create
+          </button>
+          <button
+            onClick={() => setShowNewForm(false)}
+            className="px-4 py-2 bg-[#2A3245] hover:bg-[#3A4355] text-white text-sm rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Grid editor */}
+      {loading ? (
+        <div className="text-gray-400 text-center py-8">Loading...</div>
+      ) : (
+        <TemplateGrid
+          template={templateData}
+          agents={agents}
+          shiftTypes={shiftTypes}
+          onUpdateSlot={handleUpdateSlot}
+        />
+      )}
+
+      {/* Publish panel */}
+      {selectedTemplate && templateData && (
+        <PublishPanel
+          templateId={selectedTemplate}
+          onPublish={handlePublish}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Publish panel ───
+
+function PublishPanel({ templateId, onPublish }) {
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [overwrite, setOverwrite] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+
+  const handleApply = (start, end) => {
+    setStartDate(`${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`)
+    setEndDate(`${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`)
+    setShowDatePicker(false)
+  }
+
+  const handlePublish = () => {
+    if (!startDate || !endDate) {
+      alert('Select a date range')
+      return
+    }
+    onPublish(startDate, endDate, overwrite)
+  }
+
+  return (
+    <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-6 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-white mb-3">Publish to weeks</h3>
+
+        <div className="space-y-4">
+          {/* Date range picker */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="w-full flex items-center gap-2 px-3 py-2 border border-[#2A3245] bg-[#0C0F14] rounded-lg text-sm text-gray-300 hover:border-blue-500 transition-colors"
+            >
+              {startDate && endDate ? (
+                <span className="font-mono">{startDate} → {endDate}</span>
+              ) : (
+                <span>Select date range</span>
+              )}
+            </button>
+            {showDatePicker && (
+              <div className="absolute top-full left-0 mt-2 z-20">
+                <CustomRangePicker
+                  startDate={startDate ? new Date(startDate) : null}
+                  endDate={endDate ? new Date(endDate) : null}
+                  onApply={handleApply}
+                  onClose={() => setShowDatePicker(false)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Overwrite checkbox */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={overwrite}
+              onChange={e => setOverwrite(e.target.checked)}
+              className="w-4 h-4 rounded border-[#2A3245] bg-[#0C0F14]"
+            />
+            <span className="text-sm text-gray-400">Overwrite existing schedules</span>
+          </label>
+
+          {/* Publish button */}
+          <button
+            onClick={handlePublish}
+            disabled={!startDate || !endDate}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors font-medium"
+          >
+            <Copy size={16} /> Publish Template
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
