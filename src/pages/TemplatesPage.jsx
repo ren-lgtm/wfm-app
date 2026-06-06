@@ -360,9 +360,11 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                       }
                     }
 
+                    const rowBg = agentIdx % 2 === 0 ? 'bg-[#0C0F14]' : 'bg-white/[0.02]'
+
                     return (
-                      <td key={day} className="border-r border-[#2A3245] p-1" style={{ minWidth: HOUR_COL_W * 24 }}>
-                        <div className="flex h-20 relative" style={{ minHeight: 80 }}>
+                      <td key={day} className={`border-r border-[#2A3245] p-0 ${rowBg}`} style={{ minWidth: HOUR_COL_W * 24 }}>
+                        <div className="flex relative" style={{ minHeight: 48 }}>
                           {/* Empty cells */}
                           {runs.map(({ startH, endH, activity, span }) => {
                             if (activity) return null
@@ -384,8 +386,10 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                             return (
                               <div
                                 key={`shift-${startH}`}
-                                className="absolute top-1 bottom-1 rounded cursor-grab active:cursor-grabbing transition-all hover:brightness-125"
+                                className={`absolute rounded cursor-grab active:cursor-grabbing ${isBeingDragged ? '' : 'hover:brightness-125'}`}
                                 style={{
+                                  top: '4px',
+                                  bottom: '4px',
                                   left: `${startH * HOUR_COL_W}px`,
                                   width: `${span * HOUR_COL_W}px`,
                                   background: shiftType?.color || '#666',
