@@ -619,12 +619,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
       }
     }
 
-    // Make all the updates and wait a bit for reload before clearing preview
+    // Make all the updates and wait for reload before clearing preview
     // This ensures the new data arrives before we clear the drag state
     const promises = updates.map(({ h, activity: act }) => updateSlot(agentId, d, h, act))
     await Promise.all(promises)
 
-    // Now clear the drag preview
+    // Wait a moment for React to process state updates from loadWeek
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // Now clear the drag preview to show the updated schedule
     setDrag(null)
   }, [drag, canEditAny, updateSlot])
 
