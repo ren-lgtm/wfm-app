@@ -162,15 +162,8 @@ function getSlotsForDate(schedule, agentId, monday, targetDate) {
   const targetMs = Date.UTC(ty, tm - 1, td)
   const dayIdx = Math.round((targetMs - mondayMs) / 86400000)
 
-  if (dayIdx < 0 || dayIdx > 6) {
-    console.warn('[getSlotsForDate] Out of range dayIdx:', { dayIdx, mondayYMD, targetYMD })
-    return {}
-  }
-  const slots = schedule[agentId]?.[dayIdx]
-  if (!slots) {
-    console.log('[getSlotsForDate] No slots found:', { agentId, dayIdx, targetYMD, agentKeys: Object.keys(schedule[agentId] || {}) })
-  }
-  return slots || {}
+  if (dayIdx < 0 || dayIdx > 6) return {}
+  return schedule[agentId]?.[dayIdx] || {}
 }
 
 // Returns the current hour in PT (0–23), derived from ET via Intl API.
@@ -477,7 +470,6 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
 function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate, userRole, userAgentId }) {
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
-  console.log('[DayView] date:', isoStr(date), 'dayIdx:', dayIdx, 'dow:', dow, 'monday:', isoStr(monday))
   const actualVol = useVolumeData(date)         // actual DB volume for this date
 
   // Check if the current schedule has any data for this specific day
@@ -518,7 +510,6 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const agentSlots = useMemo(() => {
     const m = {}
     for (const a of agents) m[a.id] = getSlotsForRender(a.id)
-    console.log('[DayView.agentSlots] Recomputed for date:', isoStr(date), 'isTemplate:', isTemplate, 'slotCounts:', Object.entries(m).map(([id, slots]) => `${id.substring(0,8)}:${Object.keys(slots).length}`).join(' '))
     return m
   }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
 
@@ -639,17 +630,11 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     }
 
     // Make all the updates and wait for reload before clearing preview
-    console.log('[handlePointerUp] Starting', updates.length, 'updates for agent', agentId, 'day', d)
-    const promises = updates.map(({ h, activity: act }) => {
-      console.log('[handlePointerUp] Calling updateSlot:', h, act)
-      return updateSlot(agentId, d, h, act)
-    })
+    const promises = updates.map(({ h, activity: act }) => updateSlot(agentId, d, h, act))
     await Promise.all(promises)
-    console.log('[handlePointerUp] All updates completed')
 
     // Wait a moment for React to process state updates from loadWeek
     await new Promise(resolve => setTimeout(resolve, 150))
-    console.log('[handlePointerUp] Delay complete, clearing drag')
 
     // Now clear the drag preview to show the updated schedule
     setDrag(null)
@@ -1813,7 +1798,6 @@ export default function TimelineView({
         converted[agent.id][di] = slots ? { ...slots } : {}
       })
     }
-    console.log('[TimelineView.schedule] Created schedule with', agents.length, 'agents,', Object.values(liveSchedule || {}).reduce((c, a) => c + Object.values(a).filter(s => Object.keys(s).length > 0).length, 0), 'days with data')
     return converted
   }, [hasLiveData, liveSchedule, agents])
 
