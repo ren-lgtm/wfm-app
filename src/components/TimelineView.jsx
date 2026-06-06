@@ -1769,12 +1769,14 @@ export default function TimelineView({
 
   // Schedule (live only, null while loading to prevent mock data flash)
   const schedule = useMemo(() => {
-    if (!hasLiveData) return null  // Don't show mock data — wait for real data
+    if (!hasLiveData || !liveSchedule) return null  // Don't show mock data — wait for real data
     const converted = {}
     for (const agent of agents) {
       converted[agent.id] = {}
       DAYS_SHORT.forEach((day, di) => {
-        converted[agent.id][di] = liveSchedule[agent.id]?.[day] || {}
+        // Copy the slots from liveSchedule, ensuring we get the latest data
+        const slots = liveSchedule[agent.id]?.[day]
+        converted[agent.id][di] = slots ? { ...slots } : {}
       })
     }
     return converted
