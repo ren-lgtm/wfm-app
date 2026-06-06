@@ -574,38 +574,50 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const handlePointerUp = useCallback((e) => {
     if (!drag || !canEditAny) return
     const { type, agentId, dow: d, origStart, origEnd, activity, previewStart, previewEnd, conflict, edge } = drag
-    setDrag(null)
     if (conflict) return
-    if (previewStart === origStart && previewEnd === origEnd) return
+    if (previewStart === origStart && previewEnd === origEnd) {
+      setDrag(null)
+      return
+    }
 
     justDragged.current = true
     setTimeout(() => { justDragged.current = false }, 150)
 
+    // Collect all changes to make
+    const updates = []
     if (type === 'move') {
       for (let h = origStart; h <= origEnd; h++) {
         if (h < previewStart || h > previewEnd) {
-          updateSlot(agentId, d, h, null)
+          updates.push({ h, activity: null })
         }
       }
       for (let h = previewStart; h <= previewEnd; h++) {
         if (h < origStart || h > origEnd) {
-          updateSlot(agentId, d, h, activity)
+          updates.push({ h, activity })
         }
       }
     } else {
       if (edge === 'right') {
         if (previewEnd > origEnd) {
-          for (let h = origEnd + 1;  h <= previewEnd; h++) updateSlot(agentId, d, h, activity)
+          for (let h = origEnd + 1;  h <= previewEnd; h++) updates.push({ h, activity })
         } else {
-          for (let h = previewEnd + 1; h <= origEnd; h++) updateSlot(agentId, d, h, null)
+          for (let h = previewEnd + 1; h <= origEnd; h++) updates.push({ h, activity: null })
         }
       } else {
         if (previewStart < origStart) {
-          for (let h = previewStart; h < origStart; h++) updateSlot(agentId, d, h, activity)
+          for (let h = previewStart; h < origStart; h++) updates.push({ h, activity })
         } else {
-          for (let h = origStart; h < previewStart; h++) updateSlot(agentId, d, h, null)
+          for (let h = origStart; h < previewStart; h++) updates.push({ h, activity: null })
         }
       }
+    }
+
+    // Clear drag preview first
+    setDrag(null)
+
+    // Make the updates (fire and forget - updateSlot will reload the schedule)
+    for (const { h, activity: act } of updates) {
+      updateSlot(agentId, d, h, act)
     }
   }, [drag, canEditAny, updateSlot])
 
