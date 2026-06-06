@@ -500,6 +500,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const agentSlots = useMemo(() => {
     const m = {}
     for (const a of agents) m[a.id] = getSlotsForRender(a.id)
+    console.log('[DayView.agentSlots] Recomputed for date:', isoStr(date), 'isTemplate:', isTemplate, 'slotCounts:', Object.entries(m).map(([id, slots]) => `${id.substring(0,8)}:${Object.keys(slots).length}`).join(' '))
     return m
   }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
 
@@ -620,12 +621,17 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     }
 
     // Make all the updates and wait for reload before clearing preview
-    // This ensures the new data arrives before we clear the drag state
-    const promises = updates.map(({ h, activity: act }) => updateSlot(agentId, d, h, act))
+    console.log('[handlePointerUp] Starting', updates.length, 'updates for agent', agentId, 'day', d)
+    const promises = updates.map(({ h, activity: act }) => {
+      console.log('[handlePointerUp] Calling updateSlot:', h, act)
+      return updateSlot(agentId, d, h, act)
+    })
     await Promise.all(promises)
+    console.log('[handlePointerUp] All updates completed')
 
     // Wait a moment for React to process state updates from loadWeek
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise(resolve => setTimeout(resolve, 150))
+    console.log('[handlePointerUp] Delay complete, clearing drag')
 
     // Now clear the drag preview to show the updated schedule
     setDrag(null)
