@@ -460,6 +460,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
 function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate, userRole, userAgentId }) {
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
+  console.log('[DayView] date:', isoStr(date), 'dayIdx:', dayIdx, 'dow:', dow, 'monday:', isoStr(monday))
   const actualVol = useVolumeData(date)         // actual DB volume for this date
 
   // Check if the current schedule has any data for this specific day
