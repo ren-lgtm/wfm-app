@@ -549,7 +549,12 @@ export default function TemplatesPage({ agents, shiftTypes }) {
 
   const handleDeleteTemplate = async (templateId) => {
     if (!confirm('Delete this template?')) return
-    await supabase.from('schedule_templates').delete().eq('id', templateId)
+    const { error } = await supabase.from('schedule_templates').delete().eq('id', templateId)
+    if (error) {
+      console.error('Delete failed:', error)
+      alert('Failed to delete template')
+      return
+    }
     setTemplates(prev => prev.filter(t => t.id !== templateId))
     setSelectedTemplate(null)
   }
