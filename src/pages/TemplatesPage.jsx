@@ -140,16 +140,16 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-[#2A3245] flex items-center justify-between">
+        <div className="px-5 py-4 border-t border-[#2A3245] flex items-center justify-between gap-3">
           {isEditing ? (
             <button
               onClick={handleDelete}
-              className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-xs bg-red-950/50 border border-red-800/60 text-red-300 hover:text-red-200 hover:bg-red-950/70 rounded-lg transition-colors font-medium"
             >
-              Delete shift
+              Delete
             </button>
           ) : <div />}
-          <div className="flex gap-2">
+          <div className="flex gap-2 ml-auto">
             <button
               onClick={onClose}
               className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
@@ -262,7 +262,6 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   }
 
   const openShiftModal = (agent, day, slots, startH) => {
-    if (justDragged.current) return
     setShiftModal({ agent, day, clickedHour: startH, agentSlots: slots })
   }
 
@@ -386,7 +385,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                             return (
                               <div
                                 key={`shift-${startH}`}
-                                className={`absolute rounded cursor-grab active:cursor-grabbing ${isBeingDragged ? '' : 'hover:brightness-125'}`}
+                                className={`absolute rounded cursor-grab active:cursor-grabbing transition-all ${isBeingDragged ? 'opacity-50' : 'hover:brightness-110 hover:shadow-lg'}`}
                                 style={{
                                   top: '2px',
                                   bottom: '2px',
@@ -394,6 +393,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                   width: `${span * HOUR_COL_W}px`,
                                   background: shiftType?.color || '#666',
                                   minHeight: '24px',
+                                  boxShadow: isBeingDragged ? '0 0 0 2px rgba(255,255,255,0.2)' : undefined,
                                 }}
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
@@ -411,6 +411,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                   })
                                 }}
                                 onClick={() => openShiftModal(agent, day, slots, startH)}
+                                title="Click to edit or drag to move"
                               >
                                 {/* Left resize handle */}
                                 <div
