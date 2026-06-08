@@ -251,8 +251,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
                   <div className="mt-0.5 ml-3 pl-3 border-l border-[#2A3245] space-y-0.5 pb-1">
                     {item.children.map(child => {
                       const CIcon = child.icon
-                      // Gate templates view to admins only
-                      if (child.id === 'templates' && role !== 'admin') return null
+                      // Gate templates view to leads and admins only
+                      if (child.id === 'templates' && role !== 'admin' && role !== 'lead') return null
                       return (
                         <button
                           key={child.id}
@@ -417,7 +417,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
           )}
 
           {/* ── TEMPLATES ── */}
-          {activeView === 'templates' && role === 'admin' && (
+          {activeView === 'templates' && (role === 'admin' || role === 'lead') && (
             <TemplatesPage agents={agents} shiftTypes={shiftTypes} />
           )}
 
