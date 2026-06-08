@@ -380,18 +380,15 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                       }
                     }
 
-                    // Show preview if dragging
-                    if (isBeingDragged) {
-                      const previewRuns = []
-                      for (let h = drag.previewStart; h <= drag.previewEnd; h++) {
-                        previewRuns.push({ h, activity: drag.activity })
-                      }
-                    }
-
-                    const rowBg = agentIdx % 2 === 0 ? 'bg-[#0C0F14]' : 'bg-white/[0.02]'
+                    // Get preview runs if dragging
+                    const previewRuns = isBeingDragged ?
+                      Array.from({ length: drag.previewEnd - drag.previewStart + 1 }, (_, i) => ({
+                        h: drag.previewStart + i,
+                        activity: drag.activity
+                      })) : []
 
                     return (
-                      <td key={day} className={`border-r border-[#2A3245] p-0 ${rowBg}`} style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
+                      <td key={day} className="border-r border-[#2A3245] p-0 bg-[#0C0F14]" style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
                         <div className="flex relative w-full h-full">
                           {/* Empty cells */}
                           {runs.map(({ startH, endH, activity, span }) => {
@@ -405,6 +402,21 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                               />
                             )
                           })}
+
+                          {/* Drag preview - show semi-transparent preview block while dragging */}
+                          {isBeingDragged && previewRuns.length > 0 && (
+                            <div
+                              className="absolute rounded opacity-60"
+                              style={{
+                                top: '2px',
+                                bottom: '2px',
+                                left: `${drag.previewStart * HOUR_COL_W}px`,
+                                width: `${(drag.previewEnd - drag.previewStart + 1) * HOUR_COL_W}px`,
+                                background: shiftTypes?.find(t => t.id === drag.activity)?.color || '#666',
+                                pointerEvents: 'none',
+                              }}
+                            />
+                          )}
 
                           {/* Shift blocks */}
                           {runs.map(({ startH, endH, activity, span }) => {
