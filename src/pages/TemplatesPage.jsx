@@ -604,82 +604,112 @@ export default function TemplatesPage({ agents, shiftTypes }) {
   }
 
   const handlePublish = async (startDateStr, endDateStr, overwrite) => {
-    if (!selectedTemplate || !templateData) return
+    if (!selectedTemplate || !templateData) {
+      throw new Error('No template selected or template data not loaded')
+    }
 
-    // Parse dates
+    // Check if template has any data
+    const hasTemplateData = Object.values(templateData.slots).some(agentDays =>
+      Object.values(agentDays).some(day => day && Object.keys(day).length > 0)
+    )
+    if (!hasTemplateData) {
+      throw new Error('Template has no schedule data to publish')
+    }
+
+    // Parse dates (handle timezone properly)
     const [sy, sm, sd] = startDateStr.split('-').map(Number)
     const [ey, em, ed] = endDateStr.split('-').map(Number)
-    const startDate = new Date(Date.UTC(sy, sm - 1, sd))
-    const endDate = new Date(Date.UTC(ey, em - 1, ed))
+    const startDate = new Date(sy, sm - 1, sd)
+    const endDate = new Date(ey, em - 1, ed)
 
     // Find all Mondays in range
     let current = new Date(startDate)
     current.setDate(current.getDate() - current.getDay() + 1)  // Move to Monday
     const mondays = []
     while (current <= endDate) {
-      const y = current.getUTCFullYear()
-      const m = String(current.getUTCMonth() + 1).padStart(2, '0')
-      const d = String(current.getUTCDate()).padStart(2, '0')
+      const y = current.getFullYear()
+      const m = String(current.getMonth() + 1).padStart(2, '0')
+      const d = String(current.getDate()).padStart(2, '0')
       mondays.push(`${y}-${m}-${d}`)
       current.setDate(current.getDate() + 7)
     }
 
     let successCount = 0
+    const errors = []
 
-    for (const mondayStr of mondays) {
-      for (const agentId in templateData.slots) {
-        for (const day of DAYS_SHORT) {
-          const templateSlots = templateData.slots[agentId]?.[day]
-          if (!templateSlots) continue
+    try {
+      for (const mondayStr of mondays) {
+        for (const agentId in templateData.slots) {
+          for (const day of DAYS_SHORT) {
+            const templateSlots = templateData.slots[agentId]?.[day]
+            if (!templateSlots) continue
 
-          // Check if week already has data
-          if (!overwrite) {
-            const { data: existing } = await supabase
+            // Check if week already has data
+            if (!overwrite) {
+              const { data: existing } = await supabase
+                .from('schedules')
+                .select('id')
+                .eq('week_start', mondayStr)
+                .eq('agent_id', agentId)
+                .eq('day_of_week', day)
+                .single()
+              if (existing) continue
+            }
+
+            // Upsert schedule
+            const { data: sched, error: schedError } = await supabase
               .from('schedules')
-              .select('id')
-              .eq('week_start', mondayStr)
-              .eq('agent_id', agentId)
-              .eq('day_of_week', day)
+              .upsert({
+                week_start: mondayStr,
+                agent_id: agentId,
+                day_of_week: day,
+                is_off: templateSlots.off ?? false,
+              }, { onConflict: 'week_start,agent_id,day_of_week' })
+              .select()
               .single()
-            if (existing) continue
+
+            if (schedError) {
+              errors.push(`${mondayStr} - ${agentId} - ${day}: ${schedError.message}`)
+              continue
+            }
+
+            if (!sched) continue
+
+            // Delete old slots
+            await supabase.from('schedule_slots').delete().eq('schedule_id', sched.id)
+
+            // Upsert new slots
+            const slotsToInsert = Object.entries(templateSlots)
+              .filter(([k]) => k !== 'off')
+              .map(([hour, activity]) => ({
+                schedule_id: sched.id,
+                hour: parseInt(hour),
+                activity,
+              }))
+
+            if (slotsToInsert.length > 0) {
+              const { error: slotsError } = await supabase.from('schedule_slots').upsert(slotsToInsert, { onConflict: 'schedule_id,hour' })
+              if (slotsError) {
+                errors.push(`Slots for ${mondayStr} - ${agentId} - ${day}: ${slotsError.message}`)
+                continue
+              }
+            }
+
+            successCount++
           }
-
-          // Upsert schedule
-          const { data: sched } = await supabase
-            .from('schedules')
-            .upsert({
-              week_start: mondayStr,
-              agent_id: agentId,
-              day_of_week: day,
-              is_off: templateSlots.off ?? false,
-            }, { onConflict: 'week_start,agent_id,day_of_week' })
-            .select()
-            .single()
-
-          if (!sched) continue
-
-          // Delete old slots
-          await supabase.from('schedule_slots').delete().eq('schedule_id', sched.id)
-
-          // Upsert new slots
-          const slotsToInsert = Object.entries(templateSlots)
-            .filter(([k]) => k !== 'off')
-            .map(([hour, activity]) => ({
-              schedule_id: sched.id,
-              hour: parseInt(hour),
-              activity,
-            }))
-
-          if (slotsToInsert.length > 0) {
-            await supabase.from('schedule_slots').upsert(slotsToInsert, { onConflict: 'schedule_id,hour' })
-          }
-
-          successCount++
         }
       }
-    }
 
-    alert(`Published template to ${successCount} agent-days across ${mondays.length} weeks`)
+      if (errors.length > 0) {
+        console.error('Publish errors:', errors)
+        alert(`Published ${successCount} agent-days, but ${errors.length} failed.\nCheck console for details.`)
+      } else {
+        alert(`Published template to ${successCount} agent-days across ${mondays.length} weeks`)
+      }
+    } catch (error) {
+      console.error('Publish error:', error)
+      throw error
+    }
   }
 
   return (
@@ -783,12 +813,17 @@ function PublishPanel({ templateId, onPublish }) {
     setShowDatePicker(false)
   }
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!startDate || !endDate) {
       alert('Select a date range')
       return
     }
-    onPublish(startDate, endDate, overwrite)
+    try {
+      await onPublish(startDate, endDate, overwrite)
+    } catch (error) {
+      console.error('Publish failed:', error)
+      alert(`Failed to publish template: ${error.message}`)
+    }
   }
 
   return (
