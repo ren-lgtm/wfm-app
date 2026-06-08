@@ -176,7 +176,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const [drag, setDrag] = useState(null)
   const dragRef = useRef(null)
   const containerRef = useRef(null)
-  const justDragged = useRef(false)
+  const pointerDownRef = useRef(null)
 
   // Keep dragRef in sync with drag state
   useEffect(() => {
@@ -225,13 +225,11 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   }
 
   const handlePointerUp = (e) => {
+    pointerDownRef.current = null
     const currentDrag = dragRef.current
     if (!currentDrag) return
     const { type, agentId, day, origStart, origEnd, activity, previewStart, previewEnd, edge } = currentDrag
     setDrag(null)
-
-    justDragged.current = true
-    setTimeout(() => { justDragged.current = false }, 150)
 
     if (type === 'move') {
       for (let h = origStart; h <= origEnd; h++) {
@@ -397,21 +395,45 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                 }}
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
-                                  const h = clientXToHour(e.clientX)
-                                  setDrag({
-                                    type: 'move',
-                                    agentId: agent.id,
+                                  pointerDownRef.current = {
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                    agent,
                                     day,
-                                    origStart: startH,
-                                    origEnd: endH,
+                                    startH,
+                                    endH,
                                     activity,
-                                    offsetH: h !== null ? h - startH : 0,
-                                    previewStart: startH,
-                                    previewEnd: endH,
-                                  })
+                                  }
                                 }}
-                                onClick={() => openShiftModal(agent, day, slots, startH)}
+                                onPointerMove={(e) => {
+                                  if (!pointerDownRef.current) return
+                                  const dx = Math.abs(e.clientX - pointerDownRef.current.x)
+                                  const dy = Math.abs(e.clientY - pointerDownRef.current.y)
+                                  // If moved more than 5px, treat as drag
+                                  if (dx > 5 || dy > 5) {
+                                    e.stopPropagation()
+                                    const h = clientXToHour(e.clientX)
+                                    setDrag({
+                                      type: 'move',
+                                      agentId: pointerDownRef.current.agent.id,
+                                      day: pointerDownRef.current.day,
+                                      origStart: pointerDownRef.current.startH,
+                                      origEnd: pointerDownRef.current.endH,
+                                      activity: pointerDownRef.current.activity,
+                                      offsetH: h !== null ? h - pointerDownRef.current.startH : 0,
+                                      previewStart: pointerDownRef.current.startH,
+                                      previewEnd: pointerDownRef.current.endH,
+                                    })
+                                    pointerDownRef.current = null
+                                  }
+                                }}
                                 title="Click to edit or drag to move"
+                                onClick={() => {
+                                  if (pointerDownRef.current) {
+                                    pointerDownRef.current = null
+                                    openShiftModal(agent, day, slots, startH)
+                                  }
+                                }}
                               >
                                 {/* Left resize handle */}
                                 <div
