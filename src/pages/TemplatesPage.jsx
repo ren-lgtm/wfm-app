@@ -177,6 +177,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const dragRef = useRef(null)
   const containerRef = useRef(null)
   const pointerDownRef = useRef(null)
+  const dragStartedRef = useRef(false)
 
   // Keep dragRef in sync with drag state
   useEffect(() => {
@@ -198,6 +199,29 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   }
 
   const handlePointerMove = (e) => {
+    // Check if this is a potential shift block drag starting
+    if (pointerDownRef.current && !dragStartedRef.current) {
+      const dx = Math.abs(e.clientX - pointerDownRef.current.x)
+      const dy = Math.abs(e.clientY - pointerDownRef.current.y)
+      // If moved more than 5px, treat as drag start
+      if (dx > 5 || dy > 5) {
+        dragStartedRef.current = true
+        const h = clientXToHour(e.clientX)
+        const pd = pointerDownRef.current
+        setDrag({
+          type: 'move',
+          agentId: pd.agent.id,
+          day: pd.day,
+          origStart: pd.startH,
+          origEnd: pd.endH,
+          activity: pd.activity,
+          offsetH: h !== null ? h - pd.startH : 0,
+          previewStart: pd.startH,
+          previewEnd: pd.endH,
+        })
+      }
+    }
+
     setDrag(currentDrag => {
       if (!currentDrag) return null
       const h = clientXToHour(e.clientX)
@@ -225,7 +249,14 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   }
 
   const handlePointerUp = (e) => {
+    // If pointer down was on a shift block but no drag started, it's a click - open modal
+    if (pointerDownRef.current && !dragStartedRef.current) {
+      const pd = pointerDownRef.current
+      openShiftModal(pd.agent, pd.day, pd.slots, pd.startH)
+    }
     pointerDownRef.current = null
+    dragStartedRef.current = false
+
     const currentDrag = dragRef.current
     if (!currentDrag) return
     const { type, agentId, day, origStart, origEnd, activity, previewStart, previewEnd, edge } = currentDrag
@@ -403,37 +434,10 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                     startH,
                                     endH,
                                     activity,
-                                  }
-                                }}
-                                onPointerMove={(e) => {
-                                  if (!pointerDownRef.current) return
-                                  const dx = Math.abs(e.clientX - pointerDownRef.current.x)
-                                  const dy = Math.abs(e.clientY - pointerDownRef.current.y)
-                                  // If moved more than 5px, treat as drag
-                                  if (dx > 5 || dy > 5) {
-                                    e.stopPropagation()
-                                    const h = clientXToHour(e.clientX)
-                                    setDrag({
-                                      type: 'move',
-                                      agentId: pointerDownRef.current.agent.id,
-                                      day: pointerDownRef.current.day,
-                                      origStart: pointerDownRef.current.startH,
-                                      origEnd: pointerDownRef.current.endH,
-                                      activity: pointerDownRef.current.activity,
-                                      offsetH: h !== null ? h - pointerDownRef.current.startH : 0,
-                                      previewStart: pointerDownRef.current.startH,
-                                      previewEnd: pointerDownRef.current.endH,
-                                    })
-                                    pointerDownRef.current = null
+                                    slots,
                                   }
                                 }}
                                 title="Click to edit or drag to move"
-                                onClick={() => {
-                                  if (pointerDownRef.current) {
-                                    pointerDownRef.current = null
-                                    openShiftModal(agent, day, slots, startH)
-                                  }
-                                }}
                               >
                                 {/* Left resize handle */}
                                 <div
