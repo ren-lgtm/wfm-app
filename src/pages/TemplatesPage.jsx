@@ -806,6 +806,7 @@ function PublishPanel({ templateId, onPublish }) {
   const [endDate, setEndDate] = useState('')
   const [overwrite, setOverwrite] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
 
   const handleApply = (start, end) => {
     setStartDate(`${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`)
@@ -818,11 +819,14 @@ function PublishPanel({ templateId, onPublish }) {
       alert('Select a date range')
       return
     }
+    setIsPublishing(true)
     try {
       await onPublish(startDate, endDate, overwrite)
     } catch (error) {
       console.error('Publish failed:', error)
       alert(`Failed to publish template: ${error.message}`)
+    } finally {
+      setIsPublishing(false)
     }
   }
 
@@ -870,10 +874,19 @@ function PublishPanel({ templateId, onPublish }) {
           {/* Publish button */}
           <button
             onClick={handlePublish}
-            disabled={!startDate || !endDate}
+            disabled={!startDate || !endDate || isPublishing}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors font-medium"
           >
-            <Copy size={16} /> Publish Template
+            {isPublishing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Publishing...
+              </>
+            ) : (
+              <>
+                <Copy size={16} /> Publish Template
+              </>
+            )}
           </button>
         </div>
       </div>
