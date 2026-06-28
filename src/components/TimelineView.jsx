@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, X, Copy, Calendar } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Copy, Calendar, Undo2, Redo2 } from 'lucide-react'
+import { useUndoRedo } from '../hooks/useUndoRedo'
 import {
   hLabel, getMondayOfWeek, toISODate,
   BASELINE_EMAIL, BASELINE_PHONE,
@@ -251,7 +252,7 @@ function useLatestWeekSchedule(agents) {
 
 // ─── Shift Modal ─────────────────────────────────────────────────────────────
 
-function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shiftTypes, onClose, onDeleteShift }) {
+function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onClose, onDeleteShift, onApply }) {
   const existingActivity = agentSlots[clickedHour]
   const isEditing = !!existingActivity && existingActivity !== 'off'
 
@@ -293,18 +294,16 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
   }, [onClose])
 
   const handleSave = () => {
-    // Clear any old block hours that fall outside the new range
+    const changes = []
     if (isEditing) {
       for (let h = blockStart; h <= blockEnd; h++) {
-        if (h < startHour || h > endHour) {
-          updateSlot(agent.id, dow, h, null)
-        }
+        if (h < startHour || h > endHour) changes.push({ hour: h, activity: null })
       }
     }
-    // Write new range
     for (let h = startHour; h <= endHour; h++) {
-      updateSlot(agent.id, dow, h, channel)
+      changes.push({ hour: h, activity: channel })
     }
+    onApply(agent.id, changes)
     onClose()
   }
 
@@ -484,12 +483,24 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     return getSlotsForDate(schedule, agentId, monday, date)
   }
 
-  // Per-agent slot maps for this day — declared before drag handlers so they can reference it
-  const agentSlots = useMemo(() => {
+  // Canonical slots from DB (source of truth for save/diff)
+  const canonicalSlots = useMemo(() => {
     const m = {}
     for (const a of agents) m[a.id] = getSlotsForRender(a.id)
     return m
   }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
+
+  // Local editable state with undo/redo — all edits land here, not in DB
+  const { current: localSlots, canUndo, canRedo, isDirty, push, undo, redo, reset } = useUndoRedo(canonicalSlots)
+
+  // Sync local state to canonical whenever the DB data changes (day nav, template
+  // fallback resolving, external reload) — but never clobber unsaved user edits.
+  const canonicalSig = useMemo(() => JSON.stringify(canonicalSlots), [canonicalSlots])
+  const isDirtyRef = useRef(isDirty)
+  isDirtyRef.current = isDirty
+  useEffect(() => {
+    if (!isDirtyRef.current) reset(canonicalSlots)
+  }, [canonicalSig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Shift modal state — only enabled when showing live (non-template) data
   // Members can only edit their own agent row
@@ -501,9 +512,55 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   }
   const [shiftModal, setShiftModal] = useState(null)
 
+  // Keep a ref to the current localSlots so callbacks don't go stale
+  const localSlotsRef = useRef(localSlots)
+  localSlotsRef.current = localSlots
+
+  // Apply a batch of { hour, activity } changes for one agent to local state
+  const handleApplyShift = useCallback((agentId, changes) => {
+    const prev = localSlotsRef.current
+    const next = { ...prev, [agentId]: { ...(prev[agentId] || {}) } }
+    for (const { hour, activity } of changes) {
+      if (activity === null) delete next[agentId][hour]
+      else next[agentId][hour] = activity
+    }
+    push(next)
+  }, [push])
+
+  // Save all local changes to DB then clear the undo history
+  const [isSaving, setIsSaving] = useState(false)
+  const canonicalSlotsRef = useRef(canonicalSlots)
+  canonicalSlotsRef.current = canonicalSlots
+
+  const handleSave = useCallback(async () => {
+    setIsSaving(true)
+    const local = localSlotsRef.current
+    const canon = canonicalSlotsRef.current
+    try {
+      const saves = []
+      for (const agent of agents) {
+        const id = agent.id
+        const agLocal = local[id] || {}
+        const agCanon = canon[id] || {}
+        const allHours = new Set([...Object.keys(agLocal), ...Object.keys(agCanon)].map(Number))
+        const changes = []
+        for (const hour of allHours) {
+          const newAct = agLocal[hour] ?? null
+          const oldAct = agCanon[hour] ?? null
+          if (newAct !== oldAct) changes.push({ hour, activity: newAct })
+        }
+        if (changes.length > 0) saves.push(batchUpdateSlots(id, dow, changes))
+      }
+      await Promise.all(saves)
+      reset(local) // clear history; new baseline is the state we just saved
+    } finally {
+      setIsSaving(false)
+    }
+  }, [agents, batchUpdateSlots, dow, reset])
+
+  const handleDiscard = useCallback(() => reset(canonicalSlots), [canonicalSlots, reset])
+
   // ── Drag state ─────────────────────────────────────────────────────────────
-  // drag = { type:'move'|'resize', agentId, dow, origStart, origEnd, activity,
-  //          offsetH, edge, previewStart, previewEnd, conflict }
   const [drag, setDrag]   = useState(null)
   const containerRef      = useRef(null)
   const justDragged       = useRef(false)
@@ -511,18 +568,33 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const [undoDelete, setUndoDelete] = useState(null)
 
   const handleDeleteShift = useCallback((agentId, dowParam, blockStart, blockEnd, activity) => {
-    for (let h = blockStart; h <= blockEnd; h++) updateSlot(agentId, dowParam, h, null)
+    const changes = []
+    for (let h = blockStart; h <= blockEnd; h++) changes.push({ hour: h, activity: null })
+    handleApplyShift(agentId, changes)
     const timeoutId = setTimeout(() => setUndoDelete(null), 5000)
-    setUndoDelete({ agentId, dow: dowParam, blockStart, blockEnd, activity, timeoutId })
-  }, [updateSlot])
+    setUndoDelete({ timeoutId })
+  }, [handleApplyShift])
 
   const handleUndoDelete = () => {
     if (!undoDelete) return
     clearTimeout(undoDelete.timeoutId)
-    const { agentId, dow: d, blockStart, blockEnd, activity } = undoDelete
-    for (let h = blockStart; h <= blockEnd; h++) updateSlot(agentId, d, h, activity)
     setUndoDelete(null)
+    undo()
   }
+
+  // Keyboard shortcuts: Cmd/Ctrl+Z = undo, +Shift = redo, +S = save
+  useEffect(() => {
+    if (!canEditAny) return
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+      if (e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo() }
+      if (e.key === 'y')                { e.preventDefault(); redo() }
+      if (e.key === 's' && isDirty)     { e.preventDefault(); handleSave() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [canEditAny, undo, redo, isDirty, handleSave])
 
   function clientXToHour(clientX) {
     if (!containerRef.current) return null
@@ -544,7 +616,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     e.preventDefault()
     const h = clientXToHour(e.clientX)
     if (h === null) return
-    const base = agentSlots[drag.agentId] || {}
+    const base = localSlots[drag.agentId] || {}
     const isRealActivity = (a, currentAct) => a && a !== 'off' && a !== currentAct
 
     if (drag.type === 'move') {
@@ -590,7 +662,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
       if (distRight > 0 && distRight < ZONE) containerRef.current.scrollLeft += (ZONE - distRight) / ZONE * 16
       else if (distLeft > 0 && distLeft < ZONE) containerRef.current.scrollLeft -= (ZONE - distLeft) / ZONE * 16
     }
-  }, [drag, canEditAny, agentSlots])
+  }, [drag, canEditAny, localSlots])
 
   const handlePointerUp = useCallback((e) => {
     if (!drag || !canEditAny) return
@@ -628,9 +700,9 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
       }
     }
 
-    setDrag(null) // clear immediately — batchUpdateSlots applies an optimistic update
-    if (changes.length > 0) batchUpdateSlots(agentId, d, changes)
-  }, [drag, canEditAny, batchUpdateSlots])
+    setDrag(null)
+    if (changes.length > 0) handleApplyShift(agentId, changes)
+  }, [drag, canEditAny, handleApplyShift])
 
   const openShiftModal = (agent, h, slots) => {
     if (!canEditAgent(agent.id) || justDragged.current) return
@@ -663,14 +735,14 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     for (const h of hours) {
       let emailStaff = 0, phoneStaff = 0
       for (const a of agents) {
-        const act = agentSlots[a.id]?.[h]
+        const act = localSlots[a.id]?.[h]
         if (act === 'email') emailStaff++
         if (act === 'phone') phoneStaff++
       }
       out[h] = { emailStaff, phoneStaff }
     }
     return out
-  }, [agentSlots, agents, hours])
+  }, [localSlots, agents, hours])
 
   // Resolve volume for a given hour: actual (past/current) or forecast (future)
   function emailVolume(h) {
@@ -718,6 +790,32 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
       {!hasDayData && templateLoading && (
         <div className="flex items-center gap-2 px-4 py-2 bg-[#0C0F14] border-b border-[#2A3245]">
           <span className="text-[10px] text-gray-600">Loading template…</span>
+        </div>
+      )}
+
+      {/* ── Unsaved changes bar ── */}
+      {canEditAny && isDirty && (
+        <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[#4F7EF8]/20 bg-[#4F7EF8]/5">
+          <span className="text-[11px] text-gray-500 mr-1">Unsaved changes</span>
+          <button onClick={undo} disabled={!canUndo} title="Undo (Cmd+Z)"
+            className="p-1 rounded text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition-colors">
+            <Undo2 size={13} />
+          </button>
+          <button onClick={redo} disabled={!canRedo} title="Redo (Cmd+Shift+Z)"
+            className="p-1 rounded text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition-colors">
+            <Redo2 size={13} />
+          </button>
+          <div className="flex-1" />
+          <button onClick={handleDiscard}
+            className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            Discard
+          </button>
+          <button onClick={handleSave} disabled={isSaving}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#4F7EF8] hover:bg-[#3D6CE6] disabled:opacity-50 text-white rounded-lg transition-colors font-medium">
+            {isSaving
+              ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+              : 'Save'}
+          </button>
         </div>
       )}
 
@@ -849,7 +947,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
             {/* ── Agent rows ── */}
             {agents.map((agent, idx) => {
               const canEdit = canEditAgent(agent.id)
-              const baseSlots = agentSlots[agent.id] || {}
+              const baseSlots = localSlots[agent.id] || {}
               const isBeingDragged = drag && drag.agentId === agent.id
               const slots = (isBeingDragged && !drag.conflict)
                 ? computeDisplaySlots(baseSlots, drag)
@@ -1242,10 +1340,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           dow={dow}
           clickedHour={shiftModal.clickedHour}
           agentSlots={shiftModal.agentSlots}
-          updateSlot={updateSlot}
           shiftTypes={shiftTypes}
           onClose={() => setShiftModal(null)}
           onDeleteShift={handleDeleteShift}
+          onApply={handleApplyShift}
         />
       )}
     </div>

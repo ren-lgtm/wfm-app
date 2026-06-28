@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, Copy, Plus, Trash2, X, Check } from 'lucide-react'
+import { ChevronRight, Copy, Plus, Trash2, X, Check, Undo2, Redo2 } from 'lucide-react'
+import { useUndoRedo } from '../hooks/useUndoRedo'
 import { supabase } from '../lib/supabase'
 import { CustomRangePicker } from '../components/CustomRangePicker'
 import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
@@ -12,7 +13,7 @@ const HOUR_COL_W = 48
 
 // ─── Modal for editing a shift in the template ───
 
-function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftTypes, onClose }) {
+function ShiftModal({ agent, dow, clickedHour, agentSlots, shiftTypes, onClose, onApply }) {
   const existingActivity = agentSlots[clickedHour]
   const isEditing = !!existingActivity && existingActivity !== 'off'
 
@@ -53,23 +54,21 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
   }, [onClose])
 
   const handleSave = () => {
+    const changes = []
     if (isEditing) {
       for (let h = blockStart; h <= blockEnd; h++) {
-        if (h < startHour || h > endHour) {
-          updateSlot(agent.id, dow, h, null)
-        }
+        if (h < startHour || h > endHour) changes.push({ hour: h, activity: null })
       }
     }
-    for (let h = startHour; h <= endHour; h++) {
-      updateSlot(agent.id, dow, h, channel)
-    }
+    for (let h = startHour; h <= endHour; h++) changes.push({ hour: h, activity: channel })
+    onApply(agent.id, dow, changes)
     onClose()
   }
 
   const handleDelete = () => {
-    for (let h = blockStart; h <= blockEnd; h++) {
-      updateSlot(agent.id, dow, h, null)
-    }
+    const changes = []
+    for (let h = blockStart; h <= blockEnd; h++) changes.push({ hour: h, activity: null })
+    onApply(agent.id, dow, changes)
     onClose()
   }
 
@@ -192,7 +191,7 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
 
 // ─── Week template grid editor (like DayView with draggable blocks) ───
 
-function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
+function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
   const [shiftModal, setShiftModal] = useState(null)
   const [drag, setDrag] = useState(null)
   const dragRef = useRef(null)
@@ -202,9 +201,72 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const dragStartedRef = useRef(false)
 
   // Keep dragRef in sync with drag state
+  useEffect(() => { dragRef.current = drag }, [drag])
+
+  // ── Local editable state with undo/redo ────────────────────────────────────
+  const canonical = useMemo(() => (template?.slots ? template.slots : {}), [template?.slots])
+
+  const { current: localSlots, canUndo, canRedo, isDirty, push, undo, redo, reset } =
+    useUndoRedo(canonical)
+
+  // Sync local state to canonical when the DB data changes (template switch,
+  // post-save refetch) — but never clobber unsaved edits.
+  const canonicalSig = useMemo(() => JSON.stringify(canonical), [canonical])
+  const isDirtyRef = useRef(isDirty)
+  isDirtyRef.current = isDirty
   useEffect(() => {
-    dragRef.current = drag
-  }, [drag])
+    if (!isDirtyRef.current) reset(JSON.parse(canonicalSig))
+  }, [canonicalSig]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const localSlotsRef = useRef(localSlots)
+  localSlotsRef.current = localSlots
+  const canonicalRef = useRef(canonical)
+  canonicalRef.current = canonical
+
+  // Apply a batch of slot changes (across potentially multiple agent/day combos)
+  const applyChanges = useCallback((changes) => {
+    const prev = localSlotsRef.current
+    const next = JSON.parse(JSON.stringify(prev))
+    for (const { agentId, day, hour, activity } of changes) {
+      if (!next[agentId]) next[agentId] = {}
+      if (!next[agentId][day]) next[agentId][day] = {}
+      if (activity === null) delete next[agentId][day][hour]
+      else next[agentId][day][hour] = activity
+    }
+    push(next)
+  }, [push])
+
+  // Called from ShiftModal: (agentId, day, [{hour, activity}])
+  const handleApplySlots = useCallback((agentId, day, changes) => {
+    applyChanges(changes.map(c => ({ agentId, day, ...c })))
+  }, [applyChanges])
+
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSave = useCallback(async () => {
+    setIsSaving(true)
+    try {
+      await onSave(localSlotsRef.current)
+      reset(localSlotsRef.current)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [onSave, reset])
+
+  const handleDiscard = useCallback(() => reset(JSON.parse(JSON.stringify(canonicalRef.current))), [reset])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+      if (e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo() }
+      if (e.key === 'y')                { e.preventDefault(); redo() }
+      if (e.key === 's' && isDirty)     { e.preventDefault(); handleSave() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo, isDirty, handleSave])
 
   // Show full 24-hour day (PT): 12am-11pm
   const hours = Array.from({ length: 24 }, (_, i) => i)
@@ -278,10 +340,9 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
 
   const handlePointerUp = (e) => {
     outerRef.current?.releasePointerCapture(e.pointerId)
-    // If pointer down was on a shift block but no drag started, it's a click - open modal
     if (pointerDownRef.current && !dragStartedRef.current) {
       const pd = pointerDownRef.current
-      openShiftModal(pd.agent, pd.day, pd.slots, pd.startH)
+      openShiftModal(pd.agent, pd.day, pd.startH)
     }
     pointerDownRef.current = null
     dragStartedRef.current = false
@@ -291,40 +352,65 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
     const { type, agentId, day, origStart, origEnd, activity, previewStart, previewEnd, edge } = currentDrag
     setDrag(null)
 
+    const changes = []
     if (type === 'move') {
       for (let h = origStart; h <= origEnd; h++) {
-        if (h < previewStart || h > previewEnd) {
-          onUpdateSlot(agentId, day, h, null)
-        }
+        if (h < previewStart || h > previewEnd) changes.push({ agentId, day, hour: h, activity: null })
       }
       for (let h = previewStart; h <= previewEnd; h++) {
-        if (h < origStart || h > origEnd) {
-          onUpdateSlot(agentId, day, h, activity)
-        }
+        if (h < origStart || h > origEnd) changes.push({ agentId, day, hour: h, activity })
       }
     } else {
       if (edge === 'right') {
         if (previewEnd > origEnd) {
-          for (let h = origEnd + 1; h <= previewEnd; h++) onUpdateSlot(agentId, day, h, activity)
+          for (let h = origEnd + 1; h <= previewEnd; h++) changes.push({ agentId, day, hour: h, activity })
         } else {
-          for (let h = previewEnd + 1; h <= origEnd; h++) onUpdateSlot(agentId, day, h, null)
+          for (let h = previewEnd + 1; h <= origEnd; h++) changes.push({ agentId, day, hour: h, activity: null })
         }
       } else {
         if (previewStart < origStart) {
-          for (let h = previewStart; h < origStart; h++) onUpdateSlot(agentId, day, h, activity)
+          for (let h = previewStart; h < origStart; h++) changes.push({ agentId, day, hour: h, activity })
         } else {
-          for (let h = origStart; h < previewStart; h++) onUpdateSlot(agentId, day, h, null)
+          for (let h = origStart; h < previewStart; h++) changes.push({ agentId, day, hour: h, activity: null })
         }
       }
     }
+    if (changes.length > 0) applyChanges(changes)
   }
 
-  const openShiftModal = (agent, day, slots, startH) => {
-    setShiftModal({ agent, day, clickedHour: startH, agentSlots: slots })
+  const openShiftModal = (agent, day, startH) => {
+    const agentDaySlots = localSlotsRef.current[agent.id]?.[day] || {}
+    setShiftModal({ agent, day, clickedHour: startH, agentSlots: agentDaySlots })
   }
 
   return (
     <>
+      {/* Unsaved changes bar */}
+      {isDirty && (
+        <div className="flex items-center gap-1.5 px-3 py-2 border border-[#2A3245] rounded-xl mb-3 bg-[#4F7EF8]/5 border-[#4F7EF8]/20">
+          <span className="text-[11px] text-gray-500 mr-1">Unsaved changes</span>
+          <button onClick={undo} disabled={!canUndo} title="Undo (Cmd+Z)"
+            className="p-1 rounded text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition-colors">
+            <Undo2 size={13} />
+          </button>
+          <button onClick={redo} disabled={!canRedo} title="Redo (Cmd+Shift+Z)"
+            className="p-1 rounded text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition-colors">
+            <Redo2 size={13} />
+          </button>
+          <div className="flex-1" />
+          <button onClick={handleDiscard}
+            className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            Discard
+          </button>
+          <button onClick={handleSave} disabled={isSaving}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#4F7EF8] hover:bg-[#3D6CE6] disabled:opacity-50 text-white rounded-lg transition-colors font-medium">
+            {isSaving
+              ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+              : 'Save'}
+          </button>
+        </div>
+      )}
+
       <div
         ref={outerRef}
         className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden"
@@ -390,7 +476,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                   </td>
 
                   {DAYS_SHORT.map(day => {
-                    const slots = template.slots?.[agent.id]?.[day] || {}
+                    const slots = localSlots[agent.id]?.[day] || {}
                     const isBeingDragged = drag && drag.agentId === agent.id && drag.day === day
 
                     // Build runs of contiguous activities
@@ -431,7 +517,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                 key={`empty-${startH}`}
                                 className="border-r border-[#2A3245] hover:bg-[#2A3245]/20 cursor-pointer active:bg-[#2A3245]/70"
                                 style={{ width: `${HOUR_COL_W * span}px`, height: '100%', flexShrink: 0 }}
-                                onClick={() => openShiftModal(agent, day, slots, startH)}
+                                onClick={() => openShiftModal(agent, day, startH)}
                               />
                             )
                           })}
@@ -472,16 +558,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
                                   outerRef.current?.setPointerCapture(e.pointerId)
-                                  pointerDownRef.current = {
-                                    x: e.clientX,
-                                    y: e.clientY,
-                                    agent,
-                                    day,
-                                    startH,
-                                    endH,
-                                    activity,
-                                    slots,
-                                  }
+                                  pointerDownRef.current = { x: e.clientX, y: e.clientY, agent, day, startH, endH, activity }
                                 }}
                                 title="Click to edit · drag to move · drag edges to resize"
                               >
@@ -551,9 +628,9 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
           dow={shiftModal.day}
           clickedHour={shiftModal.clickedHour}
           agentSlots={shiftModal.agentSlots}
-          updateSlot={onUpdateSlot}
           shiftTypes={shiftTypes}
           onClose={() => setShiftModal(null)}
+          onApply={handleApplySlots}
         />
       )}
     </>
@@ -646,32 +723,49 @@ export default function TemplatesPage({ agents, shiftTypes }) {
     setSelectedTemplate(null)
   }
 
-  const handleUpdateSlot = async (agentId, day, hour, activity) => {
+  // Persist the full local slots map to the DB by diffing against templateData,
+  // then refetch so templateData reflects the saved state.
+  const handleSaveTemplate = async (localSlots) => {
     if (!selectedTemplate) return
+    const canon = templateData?.slots || {}
 
-    // Upsert template_schedule
-    const { data: sched } = await supabase
-      .from('template_schedules')
-      .upsert({
-        template_id: selectedTemplate,
-        agent_id: agentId,
-        day_of_week: day,
-        is_off: false,
-      }, { onConflict: 'template_id,agent_id,day_of_week' })
-      .select()
-      .single()
-
-    if (!sched) return
-
-    if (activity === null) {
-      await supabase.from('template_slots').delete().eq('template_schedule_id', sched.id).eq('hour', hour)
-    } else {
-      await supabase
-        .from('template_slots')
-        .upsert({ template_schedule_id: sched.id, hour, activity }, { onConflict: 'template_schedule_id,hour' })
+    // Collect per-(agent,day) writes that differ from the canonical state
+    const dirtyDays = []
+    const agentIds = new Set([...Object.keys(localSlots), ...Object.keys(canon)])
+    for (const agentId of agentIds) {
+      for (const day of DAYS_SHORT) {
+        const local = localSlots[agentId]?.[day] || {}
+        const prev  = canon[agentId]?.[day] || {}
+        if (JSON.stringify(local) !== JSON.stringify(prev)) {
+          dirtyDays.push({ agentId, day, slots: local })
+        }
+      }
     }
 
-    // Reload template data
+    for (const { agentId, day, slots } of dirtyDays) {
+      const { data: sched } = await supabase
+        .from('template_schedules')
+        .upsert({
+          template_id: selectedTemplate,
+          agent_id: agentId,
+          day_of_week: day,
+          is_off: false,
+        }, { onConflict: 'template_id,agent_id,day_of_week' })
+        .select()
+        .single()
+      if (!sched) continue
+
+      // Replace all slots for this schedule with the local set
+      await supabase.from('template_slots').delete().eq('template_schedule_id', sched.id)
+      const rows = Object.entries(slots)
+        .filter(([k]) => k !== 'off')
+        .map(([hour, activity]) => ({ template_schedule_id: sched.id, hour: parseInt(hour), activity }))
+      if (rows.length > 0) {
+        await supabase.from('template_slots').upsert(rows, { onConflict: 'template_schedule_id,hour' })
+      }
+    }
+
+    // Refetch canonical state
     const { data: schedules } = await supabase
       .from('template_schedules')
       .select('*, template_slots(*)')
@@ -681,12 +775,9 @@ export default function TemplatesPage({ agents, shiftTypes }) {
     for (const s of (schedules || [])) {
       if (!slots[s.agent_id]) slots[s.agent_id] = {}
       const daySlots = {}
-      for (const slot of s.template_slots || []) {
-        daySlots[slot.hour] = slot.activity
-      }
+      for (const slot of s.template_slots || []) daySlots[slot.hour] = slot.activity
       slots[s.agent_id][s.day_of_week] = s.is_off ? { off: true } : daySlots
     }
-
     setTemplateData({ id: selectedTemplate, slots })
   }
 
@@ -876,7 +967,7 @@ export default function TemplatesPage({ agents, shiftTypes }) {
           template={templateData}
           agents={agents}
           shiftTypes={shiftTypes}
-          onUpdateSlot={handleUpdateSlot}
+          onSave={handleSaveTemplate}
         />
       )}
 
