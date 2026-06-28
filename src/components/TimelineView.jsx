@@ -1046,7 +1046,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               <div
                                 data-handle="left"
                                 title="Drag to resize"
-                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l bg-white/10 hover:bg-white/30 z-10"
+                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l hover:bg-white/25 z-10"
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
                                   containerRef.current?.setPointerCapture(e.pointerId)
@@ -1064,7 +1064,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               <div
                                 data-handle="right"
                                 title="Drag to resize"
-                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r bg-white/10 hover:bg-white/30 z-10"
+                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r hover:bg-white/25 z-10"
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
                                   containerRef.current?.setPointerCapture(e.pointerId)

@@ -564,7 +564,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                               >
                                 {/* Left resize handle */}
                                 <div
-                                  className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-white/30 rounded-l"
+                                  className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/25 rounded-l"
                                   title="Drag to resize"
                                   onPointerDown={(e) => {
                                     e.stopPropagation()
@@ -589,7 +589,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                                 </div>
                                 {/* Right resize handle */}
                                 <div
-                                  className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-white/30 rounded-r"
+                                  className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/25 rounded-r"
                                   title="Drag to resize"
                                   onPointerDown={(e) => {
                                     e.stopPropagation()
