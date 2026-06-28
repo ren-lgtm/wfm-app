@@ -686,7 +686,17 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
 
     const { type, agentId, dow: d, origStart, origEnd, activity, previewStart, previewEnd, conflict, edge } = drag
     if (conflict) { setDrag(null); return }
-    if (previewStart === origStart && previewEnd === origEnd) { setDrag(null); return }
+    // No movement = a click. Open the edit modal here (the block's own onClick is
+    // swallowed by pointer capture). Pointer-down on a block is only allowed when
+    // editable, so no extra permission check is needed.
+    if (previewStart === origStart && previewEnd === origEnd) {
+      setDrag(null)
+      if (type === 'move' && !justDragged.current) {
+        const ag = agents.find(a => a.id === agentId)
+        if (ag) setShiftModal({ agent: ag, clickedQuarter: origStart, agentSlots: localSlots[agentId] || {} })
+      }
+      return
+    }
 
     justDragged.current = true
     setTimeout(() => { justDragged.current = false }, 150)
@@ -718,7 +728,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
 
     setDrag(null)
     if (changes.length > 0) handleApplyShift(agentId, changes)
-  }, [drag, canEditAny, handleApplyShift])
+  }, [drag, canEditAny, handleApplyShift, agents, localSlots])
 
   const openShiftModal = (agent, q, slots) => {
     if (!canEditAgent(agent.id) || justDragged.current) return
@@ -999,8 +1009,10 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                   </td>
                   {/* Schedule area: 24 hourly background cells + quarter-precise blocks */}
                   <td colSpan={hours.length} data-schedule-area className="relative p-0">
-                    {/* Hourly background grid (tint + click-to-add) */}
-                    <div className="flex w-full h-full">
+                    {/* Hourly background grid (tint + click-to-add).
+                        Absolute inset-0 so it fills the cell height — a plain
+                        h-full div collapses to 0 inside a table cell. */}
+                    <div className="absolute inset-0 flex">
                       {hours.map(h => {
                         const isCurrentH = isToday && h === currentHour
                         const isPastH    = isToday && h < currentHour
@@ -1009,7 +1021,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                           <div
                             key={h}
                             onClick={canEdit ? () => openShiftModal(agent, h * QUARTERS_PER_HOUR, baseSlots) : undefined}
-                            className={`flex-1 border-r border-[#1A1F2E]/40 ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/30 active:bg-[#2A3245]/50' : ''} ${
+                            className={`flex-1 ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/30 active:bg-[#2A3245]/50' : ''} ${
                               isCurrentH ? 'bg-blue-950/20' : isPhoneH ? 'bg-emerald-950/20' : ''
                             } ${isPastH ? 'opacity-90' : ''}`}
                           />
@@ -1064,7 +1076,6 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               width: `${span   / QUARTERS_PER_DAY * 100}%`,
                               ...(shiftType ? { background: shiftType.color + '33', color: shiftType.color } : {}),
                             }}
-                            onClick={canEdit ? () => { if (!justDragged.current) openShiftModal(agent, startQ, baseSlots) } : undefined}
                             onPointerDown={canEdit ? (e) => {
                               if (e.target.dataset.handle) return
                               e.stopPropagation()
