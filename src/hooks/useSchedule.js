@@ -5,7 +5,7 @@ import { getMondayOfWeek, toISODate, buildForecast, DAYS } from '../lib/forecast
 export function useSchedule({ userId } = {}) {
   const [agents, setAgents] = useState([])
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()))
-  const [weekSchedule, setWeekSchedule] = useState({}) // { agentId: { Mon: { hour: activity } } }
+  const [weekSchedule, setWeekSchedule] = useState(null) // { agentId: { Mon: { hour: activity } } }
 
   const [monthSchedule, setMonthSchedule] = useState({}) // { agentId: { dateStr: { hour: activity } } } for entire month
   const [forecast, setForecast] = useState({ phoneForecast: {}, emailForecast: {} })

@@ -11,50 +11,6 @@ import {
 import { supabase } from '../lib/supabase'
 import { CustomRangePicker } from './CustomRangePicker'
 
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-
-const MOCK_AGENTS = [
-  { id: 'a1', name: 'Deb',     color: '#7C3AED', default_channel: 'email' },
-  { id: 'a2', name: 'Ezra',    color: '#0891B2', default_channel: 'email' },
-  { id: 'a3', name: 'Lucy',    color: '#059669', default_channel: 'email' },
-  { id: 'a4', name: 'Delaney', color: '#D97706', default_channel: 'email' },
-  { id: 'a5', name: 'Allison', color: '#DC2626', default_channel: 'email' },
-  { id: 'a6', name: 'Dolly',   color: '#DB2777', default_channel: 'email' },
-  { id: 'a7', name: 'Lori',    color: '#65A30D', default_channel: 'email' },
-]
-
-function generateAgentDay(agentIdx, dayOfWeek) {
-  const isWeekend = dayOfWeek >= 5
-  if (isWeekend) {
-    if (agentIdx < 4) return null
-    const slots = {}
-    for (let h = 9; h <= 16; h++) { slots[h] = h === 12 ? 'lunch' : 'email' }
-    return slots
-  }
-  const patterns = [
-    (h) => h >= 8  && h <= 16 ? (h === 12 ? 'lunch' : 'email') : null,
-    (h) => h >= 9  && h <= 17 ? (h === 13 ? 'lunch' : 'email') : null,
-    (h) => h >= 8  && h <= 15 ? (h === 12 ? 'lunch' : 'email') : null,
-    (h) => h >= 10 && h <= 18 ? (h === 14 ? 'lunch' : 'email') : null,
-    (h) => h >= 8  && h <= 16 ? (h === 11 ? 'lunch' : 'email') : null,
-    (h) => h >= 9  && h <= 16 ? (h === 13 ? 'lunch' : 'email') : null,
-    (h) => h >= 8  && h <= 15 ? (h === 12 ? 'lunch' : 'email') : null,
-  ]
-  const fn = patterns[agentIdx % patterns.length]
-  const slots = {}
-  for (let h = 0; h < 24; h++) { const v = fn(h); if (v) slots[h] = v }
-  return slots
-}
-
-function buildMockSchedule() {
-  const schedule = {}
-  for (const [idx, agent] of MOCK_AGENTS.entries()) {
-    schedule[agent.id] = {}
-    for (let d = 0; d < 7; d++) { schedule[agent.id][d] = generateAgentDay(idx, d) }
-  }
-  return schedule
-}
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ALL_HOURS  = Array.from({ length: 24 }, (_, i) => i)
@@ -1821,13 +1777,11 @@ export default function TimelineView({
     }
   }, [showDatePicker])
 
-  // Live vs mock agents
-  const hasLiveData = liveAgents && liveAgents.length > 0
-  const agents = hasLiveData ? liveAgents : MOCK_AGENTS
+  const agents = liveAgents || []
 
   // Anchor Monday
   const monday = useMemo(() => {
-    if (hasLiveData && liveMonday) return liveMonday
+    if (liveMonday) return liveMonday
     // Compute Monday from todayPT (PT date string) without parsing through new Date
     const [y, m, d] = todayPT.split('-').map(Number)
     const ptDate = new Date(Date.UTC(y, m - 1, d))
@@ -1838,12 +1792,12 @@ export default function TimelineView({
     const mm = String(monday.getUTCMonth() + 1).padStart(2, '0')
     const md = String(monday.getUTCDate()).padStart(2, '0')
     return `${my}-${mm}-${md}`
-  }, [hasLiveData, liveMonday, todayPT])
+  }, [liveMonday, todayPT])
 
   // When selectedDate moves to a different week, sync the parent's currentMonday.
   // This ensures useSchedule loads that week's data and updateSlot writes to the correct week_start.
   useEffect(() => {
-    if (!onWeekChange || !hasLiveData) return
+    if (!onWeekChange) return
     const selectedMonday    = getMondayOfWeek(selectedDate)
     const selectedMondayStr = toISODate(selectedMonday)
     const currentMondayStr  = liveMonday ? toISODate(liveMonday) : null
@@ -1852,20 +1806,19 @@ export default function TimelineView({
     }
   }, [selectedDate, liveMonday])
 
-  // Schedule (live only, null while loading to prevent mock data flash)
+  // Schedule — null while liveSchedule hasn't loaded yet
   const schedule = useMemo(() => {
-    if (!hasLiveData || !liveSchedule) return null  // Don't show mock data — wait for real data
+    if (!liveSchedule) return null
     const converted = {}
     for (const agent of agents) {
       converted[agent.id] = {}
       DAYS_SHORT.forEach((day, di) => {
-        // Copy the slots from liveSchedule, ensuring we get the latest data
         const slots = liveSchedule[agent.id]?.[day]
         converted[agent.id][di] = slots ? { ...slots } : {}
       })
     }
     return converted
-  }, [hasLiveData, liveSchedule, agents])
+  }, [liveSchedule, agents])
 
   // Forecast — use live if available, else baseline
   const phoneForecast = useMemo(() => livePF && Object.keys(livePF).length > 0 ? livePF : BASELINE_PHONE, [livePF])
@@ -2091,21 +2044,15 @@ export default function TimelineView({
           )}
         </div>
 
-        {/* Mock data banner */}
-        {!hasLiveData && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-800/50">
-            <span className="text-[10px] text-amber-400">Showing mock data — connect Supabase to see live schedules</span>
-          </div>
-        )}
       </div>
 
       {/* ── View content ── */}
-      {!schedule && hasLiveData ? (
+      {!schedule ? (
         <div className="flex flex-col items-center justify-center gap-3 py-12">
           <div className="text-sm text-gray-400">Loading schedule…</div>
           <div className="w-8 h-8 border-2 border-gray-700 border-t-blue-500 rounded-full animate-spin" />
         </div>
-      ) : schedule ? (
+      ) : (
         <>
           {viewMode === 'day' && (
             <DayView
@@ -2154,7 +2101,7 @@ export default function TimelineView({
             />
           )}
         </>
-      ) : null}
+      )}
     </div>
   )
 }
