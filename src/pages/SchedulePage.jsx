@@ -132,11 +132,24 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const slaColor = (pct) =>
     pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400'
 
+  const VIEW_TITLE = {
+    'timeline':         'Schedule · Timeline',
+    'templates':        'Schedule · Templates',
+    'forecast-volume':  'Forecast · Volume',
+    'forecast-sla':     'Forecast · SLA History',
+    'forecast-targets': 'Forecast · Staffing Targets',
+    'users':            'Users',
+    'settings':         'Settings',
+  }
+
   // ── Handlers ──
   const handleCopyLastWeek = async () => {
+    const [y, m, d] = currentMonday.split('-').map(Number)
+    const prevMonday = new Date(Date.UTC(y, m - 1, d - 7))
+    const prevLabel = prevMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
     const ok = await copyLastWeek()
-    setCopyMsg(ok ? 'Copied!' : 'No previous week found')
-    setTimeout(() => setCopyMsg(''), 2500)
+    setCopyMsg(ok ? `Copied from week of ${prevLabel}` : 'No schedule found for last week')
+    setTimeout(() => setCopyMsg(''), 3500)
   }
 
   // ── Sidebar helpers ──
@@ -362,6 +375,13 @@ export default function SchedulePage({ theme, toggleTheme }) {
             </div>
           )}
 
+          {/* Active view breadcrumb */}
+          {VIEW_TITLE[activeView] && (
+            <div className="text-xs font-medium" style={{ color: 'var(--text-tertiary)' }}>
+              {VIEW_TITLE[activeView]}
+            </div>
+          )}
+
           {/* ── TIMELINE ── */}
           {activeView === 'timeline' && (
             <>
@@ -380,24 +400,40 @@ export default function SchedulePage({ theme, toggleTheme }) {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Inbound calls · {viewInfo.label}</div>
-                  <div className="text-2xl font-mono font-medium text-gray-300">{phoneTotalVolume !== null ? phoneTotalVolume.toLocaleString() : '—'}</div>
+                  <div
+                    className="text-2xl font-mono font-medium text-gray-300"
+                    title={phoneTotalVolume === null ? 'No call volume data for this period' : undefined}
+                  >
+                    {phoneTotalVolume !== null ? phoneTotalVolume.toLocaleString() : '—'}
+                  </div>
                   <div className="text-[10px] text-gray-600 mt-1">{kpis?.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Answer rate · {viewInfo.label}</div>
-                  <div className={`text-2xl font-mono font-medium ${kpis && kpis.answerRate !== null ? slaColor(kpis.answerRate) : 'text-gray-600'}`}>
+                  <div
+                    className={`text-2xl font-mono font-medium ${kpis && kpis.answerRate !== null ? slaColor(kpis.answerRate) : 'text-gray-600'}`}
+                    title={kpis && kpis.answerRate === null ? 'No SLA data for this period — calculated from historical phone records once available' : undefined}
+                  >
                     {kpis && kpis.answerRate !== null ? `${kpis.answerRate}%` : '—'}
                   </div>
                   <div className="text-[10px] text-gray-600 mt-1">{kpis && kpis.answerRate !== null ? 'target: 95%' : 'no data yet'}</div>
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Tickets created · {viewInfo.label}</div>
-                  <div className="text-2xl font-mono font-medium text-gray-300">{emailTotalVolume !== null ? emailTotalVolume.toLocaleString() : '—'}</div>
+                  <div
+                    className="text-2xl font-mono font-medium text-gray-300"
+                    title={emailTotalVolume === null ? 'No ticket data for this period' : undefined}
+                  >
+                    {emailTotalVolume !== null ? emailTotalVolume.toLocaleString() : '—'}
+                  </div>
                   <div className="text-[10px] text-gray-600 mt-1">{kpis?.hasFutureData ? 'actual + forecast' : 'actual'}</div>
                 </div>
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Avg handle rate</div>
-                  <div className="text-2xl font-mono font-medium text-gray-300">
+                  <div
+                    className="text-2xl font-mono font-medium text-gray-300"
+                    title={rangeRate === null ? 'No handle rate data — requires historical ticket and agent records' : undefined}
+                  >
                     {rangeRate !== null ? rangeRate.toFixed(1) : '—'}
                   </div>
                   <div className="text-[10px] text-gray-600 mt-1">tickets/agent/hr</div>

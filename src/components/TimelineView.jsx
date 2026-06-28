@@ -295,7 +295,7 @@ function useLatestWeekSchedule(agents) {
 
 // ─── Shift Modal ─────────────────────────────────────────────────────────────
 
-function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shiftTypes, onClose }) {
+function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shiftTypes, onClose, onDeleteShift }) {
   const existingActivity = agentSlots[clickedHour]
   const isEditing = !!existingActivity && existingActivity !== 'off'
 
@@ -317,6 +317,25 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
   const [startHour, setStartHour] = useState(blockStart)
   const [endHour,   setEndHour]   = useState(blockEnd)
 
+  const modalRef = useRef(null)
+  useEffect(() => {
+    const modal = modalRef.current
+    if (!modal) return
+    const focusable = Array.from(modal.querySelectorAll(
+      'button:not([disabled]), select, input, [tabindex]:not([tabindex="-1"])'
+    ))
+    if (focusable.length) focusable[0].focus()
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab' || !focusable.length) return
+      const first = focusable[0], last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   const handleSave = () => {
     // Clear any old block hours that fall outside the new range
     if (isEditing) {
@@ -334,8 +353,10 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
   }
 
   const handleDelete = () => {
-    for (let h = blockStart; h <= blockEnd; h++) {
-      updateSlot(agent.id, dow, h, null)
+    if (onDeleteShift) {
+      onDeleteShift(agent.id, dow, blockStart, blockEnd, agentSlots[clickedHour])
+    } else {
+      for (let h = blockStart; h <= blockEnd; h++) updateSlot(agent.id, dow, h, null)
     }
     onClose()
   }
@@ -350,6 +371,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         className="bg-[#141922] border border-[#2A3245] rounded-xl w-11/12 max-w-sm shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
@@ -529,6 +551,22 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const [drag, setDrag]   = useState(null)
   const containerRef      = useRef(null)
   const justDragged       = useRef(false)
+
+  const [undoDelete, setUndoDelete] = useState(null)
+
+  const handleDeleteShift = useCallback((agentId, dowParam, blockStart, blockEnd, activity) => {
+    for (let h = blockStart; h <= blockEnd; h++) updateSlot(agentId, dowParam, h, null)
+    const timeoutId = setTimeout(() => setUndoDelete(null), 5000)
+    setUndoDelete({ agentId, dow: dowParam, blockStart, blockEnd, activity, timeoutId })
+  }, [updateSlot])
+
+  const handleUndoDelete = () => {
+    if (!undoDelete) return
+    clearTimeout(undoDelete.timeoutId)
+    const { agentId, dow: d, blockStart, blockEnd, activity } = undoDelete
+    for (let h = blockStart; h <= blockEnd; h++) updateSlot(agentId, d, h, activity)
+    setUndoDelete(null)
+  }
 
   function clientXToHour(clientX) {
     if (!containerRef.current) return null
@@ -914,6 +952,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                         <td
                           key={startH}
                           colSpan={span}
+                          title={canEdit ? 'Click to edit · drag to move' : undefined}
                           className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''}`}
                           onClick={canEdit ? (e) => {
                             if (!justDragged.current) openShiftModal(agent, startH, baseSlots)
@@ -1217,6 +1256,16 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         </div>
       )}
 
+      {/* Undo delete toast */}
+      {undoDelete && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#141922] border border-[#2A3245] shadow-2xl text-sm">
+          <span className="text-gray-400">Shift deleted</span>
+          <button onClick={handleUndoDelete} className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+            Undo
+          </button>
+        </div>
+      )}
+
       {/* Shift modal */}
       {shiftModal && (
         <ShiftModal
@@ -1228,6 +1277,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           updateSlot={updateSlot}
           shiftTypes={shiftTypes}
           onClose={() => setShiftModal(null)}
+          onDeleteShift={handleDeleteShift}
         />
       )}
     </div>
