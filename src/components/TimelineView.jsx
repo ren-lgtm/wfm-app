@@ -1014,14 +1014,14 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                           key={startH}
                           colSpan={span}
                           title={canEdit ? 'Click to edit · drag to move · drag edges to resize' : undefined}
-                          className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                          className={`relative p-0 bg-transparent ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''}`}
                           onClick={canEdit ? (e) => {
                             if (!justDragged.current) openShiftModal(agent, startH, baseSlots)
                           } : undefined}
                         >
                           <div
                             className={`
-                              relative text-center rounded text-[9px] font-medium py-1 select-none
+                              absolute inset-0 flex items-center justify-center text-center text-[9px] font-medium select-none
                               ${shiftType ? '' : `${cs.bg} ${cs.text}`}
                               ${isPast ? 'opacity-60' : ''}
                               ${isPreview ? 'opacity-60 ring-1 ring-white/20' : ''}
