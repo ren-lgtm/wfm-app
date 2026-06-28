@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, Check, X, GripVertical, ChevronUp, ChevronDown } from 'lucide-react'
 import { DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
+import ConfirmModal from '../components/ConfirmModal'
 
 // ─── Inline add / edit form ───────────────────────────────────────────────────
 
@@ -127,22 +128,14 @@ function ShiftTypeRow({ type, onEdit, onDelete, onUp, onDown, isFirst, isLast })
 
 export default function SettingsPage({ shiftTypes, onAdd, onUpdate, onDelete, onReorder }) {
   const [editingId, setEditingId] = useState(null) // null | 'new' | type.id
+  const [confirmModal, setConfirmModal] = useState(null) // null | { title, message, onConfirm }
 
   const handleDelete = (type) => {
-    if (window.confirm(`Delete "${type.name}"? Existing shifts with this type will still display, but won't be editable as this type.`)) {
-      onDelete(type.id)
-    }
-  }
-
-  const handleReset = () => {
-    if (window.confirm('Reset shift types to defaults? This will replace your current list.')) {
-      DEFAULT_SHIFT_TYPES.forEach((t, i) => {
-        // Simple approach: clear and re-add via onAdd wouldn't work well since IDs might conflict.
-        // Instead, parent should expose a reset. For now, delete all and re-add.
-      })
-      // Call onUpdate for matching IDs, onAdd for new ones — instead just signal the parent
-      onAdd('__reset__') // handled specially in parent
-    }
+    setConfirmModal({
+      title: `Delete "${type.name}"?`,
+      message: "Existing shifts with this type will still display, but won't be editable as this type.",
+      onConfirm: () => { onDelete(type.id); setConfirmModal(null) },
+    })
   }
 
   return (
@@ -223,9 +216,12 @@ export default function SettingsPage({ shiftTypes, onAdd, onUpdate, onDelete, on
           <div className="px-5 py-3 border-t border-[#2A3245] bg-[#0C0F14] flex items-center justify-between">
             <span className="text-[11px] text-gray-600">{shiftTypes.length} type{shiftTypes.length !== 1 ? 's' : ''}</span>
             <button
-              onClick={() => {
-                if (window.confirm('Reset to default shift types?')) onAdd('__reset__')
-              }}
+              onClick={() => setConfirmModal({
+                title: 'Reset to default shift types?',
+                message: 'This will replace your current list.',
+                confirmLabel: 'Reset',
+                onConfirm: () => { onAdd('__reset__'); setConfirmModal(null) },
+              })}
               className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors"
             >
               Reset to defaults
@@ -233,6 +229,16 @@ export default function SettingsPage({ shiftTypes, onAdd, onUpdate, onDelete, on
           </div>
         </div>
       </div>
+
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel || 'Delete'}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   )
 }

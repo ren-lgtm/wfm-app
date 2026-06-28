@@ -11,10 +11,10 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const GAP_COLORS = {
-  critical: { bg: 'bg-red-900/70', text: 'text-red-300', border: 'border-red-700' },
-  warn:     { bg: 'bg-amber-900/50', text: 'text-amber-300', border: 'border-amber-700' },
-  ok:       { bg: 'bg-emerald-900/50', text: 'text-emerald-300', border: 'border-emerald-700' },
-  none:     { bg: 'bg-[#111827]', text: 'text-gray-600', border: 'border-gray-800' },
+  critical: { bg: 'bg-red-900/70', text: 'text-red-300', border: 'border-red-700', indicator: '!!' },
+  warn:     { bg: 'bg-amber-900/50', text: 'text-amber-300', border: 'border-amber-700', indicator: '!' },
+  ok:       { bg: 'bg-emerald-900/50', text: 'text-emerald-300', border: 'border-emerald-700', indicator: '' },
+  none:     { bg: 'bg-[#111827]', text: 'text-gray-600', border: 'border-gray-800', indicator: '' },
 }
 
 const QUEUE_COLORS = {
@@ -113,11 +113,12 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
             return (
               <div
                 key={h}
-                title={`${hLabel(h)}: ${n} agents, ~${vol} calls, ${Math.round(rate*100)}% answer rate. Need ${needed} for 95% SLA.`}
+                title={`${hLabel(h)} [${gap.toUpperCase()}]: ${n} agents, ~${vol} calls, ${Math.round(rate*100)}% answer rate. Need ${needed} for 95% SLA.`}
+                aria-label={`${hLabel(h)} ${gap}: ${Math.round(rate*100)}% answer rate`}
                 className={`flex-1 h-7 rounded border ${c.bg} ${c.border} flex flex-col items-center justify-center cursor-default`}
               >
                 <span className={`text-[10px] font-mono font-medium ${c.text}`}>
-                  {vol > 0 ? `${Math.round(rate*100)}%` : '–'}
+                  {vol > 0 ? `${c.indicator}${Math.round(rate*100)}%` : '–'}
                 </span>
                 {vol > 0 && n < needed && (
                   <span className={`text-[8px] ${c.text} opacity-60`}>need {needed}</span>
@@ -173,11 +174,12 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
             return (
               <div
                 key={h}
-                title={`${hLabel(h)}: ${n} agents, ~${vol} tickets, ${Math.round(rate*100)}% coverage. Need ${needed} for 95% SLA.`}
+                title={`${hLabel(h)} [${gap.toUpperCase()}]: ${n} agents, ~${vol} tickets, ${Math.round(rate*100)}% coverage. Need ${needed} for 95% SLA.`}
+                aria-label={`${hLabel(h)} ${gap}: ${Math.round(rate*100)}% coverage`}
                 className={`flex-1 h-7 rounded border ${c.bg} ${c.border} flex flex-col items-center justify-center cursor-default`}
               >
                 <span className={`text-[10px] font-mono font-medium ${c.text}`}>
-                  {vol > 0 ? `${Math.round(rate*100)}%` : '–'}
+                  {vol > 0 ? `${c.indicator}${Math.round(rate*100)}%` : '–'}
                 </span>
                 {vol > 0 && n < needed && (
                   <span className={`text-[8px] ${c.text} opacity-60`}>need {needed}</span>

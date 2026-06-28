@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
-  ChevronLeft, ChevronRight, ChevronDown,
+  ChevronLeft, ChevronRight, ChevronDown, Menu,
   Users, BarChart2, Calendar, LayoutTemplate,
-  GitBranch, TrendingUp, Clock, Target, Settings, LogOut,
+  GitBranch, TrendingUp, Clock, Target, Settings, LogOut, Check,
 } from 'lucide-react'
 import { useSchedule } from '../hooks/useSchedule'
 import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
@@ -83,9 +83,21 @@ export default function SchedulePage({ theme, toggleTheme }) {
   }
 
   const [activeView,       setActiveView]       = useState('timeline')
-  const [sidebarOpen,      setSidebarOpen]       = useState(true)
+  const [sidebarOpen,      setSidebarOpen]       = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768)
   const [expandedSections, setExpandedSections] = useState({ schedule: true, forecast: false })
   const [copyMsg, setCopyMsg] = useState('')
+
+  // Show "Saved" toast when a save completes without error
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const prevSavingRef = useRef(false)
+  useEffect(() => {
+    if (prevSavingRef.current && !saving && !saveError) {
+      setSaveSuccess(true)
+      const t = setTimeout(() => setSaveSuccess(false), 2000)
+      return () => clearTimeout(t)
+    }
+    prevSavingRef.current = saving
+  }, [saving, saveError])
 
   // ── Timeline view info (reported back from TimelineView) ──
   const [viewInfo, setViewInfo] = useState({ mode: 'day', dows: [], label: 'Today', startDate: null, endDate: null })
@@ -143,6 +155,11 @@ export default function SchedulePage({ theme, toggleTheme }) {
   const isViewUnderSection = (sectionId) =>
     NAV.find(n => n.id === sectionId)?.children?.some(c => c.id === activeView)
 
+  const handleNavSelect = (viewId) => {
+    setActiveView(viewId)
+    if (window.innerWidth < 768) setSidebarOpen(false)
+  }
+
   // ── Section prop map for ForecastChart ──
   const FORECAST_SECTION = {
     'forecast-volume':  'volume',
@@ -153,9 +170,14 @@ export default function SchedulePage({ theme, toggleTheme }) {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
 
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* ─── Sidebar ─────────────────────────────────────────────────────────── */}
       <aside
-        className={`flex flex-col shrink-0 border-r transition-all duration-200 ${sidebarOpen ? 'w-56' : 'w-14'}`}
+        className={`flex flex-col border-r transition-all duration-200 fixed inset-y-0 left-0 z-40 md:static md:z-auto md:inset-auto md:shrink-0 ${sidebarOpen ? 'w-56 translate-x-0' : 'w-56 -translate-x-full md:translate-x-0 md:w-14'}`}
         style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-secondary)' }}
       >
         {/* Logo row */}
@@ -206,8 +228,9 @@ export default function SchedulePage({ theme, toggleTheme }) {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveView(item.id)}
-                  title={!sidebarOpen ? item.label : undefined}
+                  onClick={() => handleNavSelect(item.id)}
+                  aria-label={item.label}
+                  title={item.label}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                     activeView === item.id
                       ? 'bg-[#2A3245] text-white'
@@ -228,7 +251,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
               <div key={item.id}>
                 <button
                   onClick={() => handleSectionHeaderClick(item)}
-                  title={!sidebarOpen ? item.label : undefined}
+                  aria-label={item.label}
+                  title={item.label}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
                     sectionActive && !isExpanded
                       ? 'bg-[#2A3245] text-white'
@@ -256,7 +280,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
                       return (
                         <button
                           key={child.id}
-                          onClick={() => setActiveView(child.id)}
+                          onClick={() => handleNavSelect(child.id)}
+                          aria-label={child.label}
                           className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
                             activeView === child.id
                               ? 'bg-[#2A3245] text-white'
@@ -279,8 +304,9 @@ export default function SchedulePage({ theme, toggleTheme }) {
         <div className="px-2 py-3 border-t space-y-0.5" style={{ borderColor: 'var(--border-primary)' }}>
           {role === 'admin' && (
             <button
-              onClick={() => setActiveView('settings')}
-              title={!sidebarOpen ? 'Settings' : undefined}
+              onClick={() => handleNavSelect('settings')}
+              aria-label="Settings"
+              title="Settings"
               className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full ${
                 activeView === 'settings'
                   ? 'bg-[#2A3245] text-white'
@@ -293,7 +319,8 @@ export default function SchedulePage({ theme, toggleTheme }) {
           )}
           <button
             onClick={signOut}
-            title={!sidebarOpen ? 'Sign out' : undefined}
+            aria-label="Sign out"
+            title="Sign out"
             className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-gray-500 hover:text-red-400 hover:bg-[#1A1F2E] w-full ${!sidebarOpen ? 'justify-center' : ''}`}
           >
             <LogOut size={15} className="shrink-0" />
@@ -305,7 +332,20 @@ export default function SchedulePage({ theme, toggleTheme }) {
       </aside>
 
       {/* ─── Main content ────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto min-w-0">
+        {/* Mobile header */}
+        <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b sticky top-0 z-20" style={{ borderColor: 'var(--border-primary)', background: 'var(--bg-secondary)' }}>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation menu"
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            <Menu size={18} />
+          </button>
+          <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0">W</div>
+          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>WFM</span>
+        </div>
         <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
 
           {/* Error banners */}
@@ -437,6 +477,25 @@ export default function SchedulePage({ theme, toggleTheme }) {
 
         </div>
       </main>
+
+      {/* Save status toast (fixed bottom-right) */}
+      {(saving || saveSuccess) && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#141922] border border-[#2A3245] shadow-2xl text-sm">
+          {saving ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <span className="text-gray-300">Saving…</span>
+            </>
+          ) : (
+            <>
+              <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                <Check size={9} className="text-white" />
+              </div>
+              <span className="text-emerald-400">Saved</span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

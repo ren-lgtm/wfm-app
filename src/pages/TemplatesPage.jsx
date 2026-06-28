@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, Copy, Plus, Trash2, X } from 'lucide-react'
+import { ChevronRight, Copy, Plus, Trash2, X, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { CustomRangePicker } from '../components/CustomRangePicker'
 import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
 import { hLabel, getMondayOfWeek, toISODate, DAYS, WORK_START, WORK_END } from '../lib/forecast'
+import ConfirmModal from '../components/ConfirmModal'
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 const DAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
@@ -529,6 +530,8 @@ export default function TemplatesPage({ agents, shiftTypes }) {
   const [loading, setLoading] = useState(false)
   const [showNewForm, setShowNewForm] = useState(false)
   const [newTemplateName, setNewTemplateName] = useState('Standard Week')
+  const [confirmDelete, setConfirmDelete] = useState(null) // null | templateId
+  const [deleteError, setDeleteError] = useState('')
 
   // Load templates
   useEffect(() => {
@@ -586,12 +589,18 @@ export default function TemplatesPage({ agents, shiftTypes }) {
     }
   }
 
-  const handleDeleteTemplate = async (templateId) => {
-    if (!confirm('Delete this template?')) return
+  const handleDeleteTemplate = (templateId) => {
+    setConfirmDelete(templateId)
+  }
+
+  const confirmDeleteTemplate = async () => {
+    const templateId = confirmDelete
+    setConfirmDelete(null)
+    setDeleteError('')
     const { error } = await supabase.from('schedule_templates').delete().eq('id', templateId)
     if (error) {
       console.error('Delete failed:', error)
-      alert('Failed to delete template')
+      setDeleteError('Failed to delete template — check your connection.')
       return
     }
     setTemplates(prev => prev.filter(t => t.id !== templateId))
@@ -741,10 +750,8 @@ export default function TemplatesPage({ agents, shiftTypes }) {
 
       if (errors.length > 0) {
         console.error('Publish errors:', errors)
-        alert(`Published ${successCount} agent-days, but ${errors.length} failed.\nCheck console for details.`)
-      } else {
-        alert(`Published template to ${successCount} agent-days across ${mondays.length} weeks`)
       }
+      return { successCount, errors, weeksCount: mondays.length }
     } catch (error) {
       console.error('Publish error:', error)
       throw error
@@ -758,6 +765,13 @@ export default function TemplatesPage({ agents, shiftTypes }) {
         <h1 className="text-2xl font-bold text-white mb-1">Templates</h1>
         <p className="text-sm text-gray-400">Create reusable schedules and publish them to multiple weeks</p>
       </div>
+
+      {deleteError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-950/60 border border-red-800/60 text-red-300 text-sm">
+          <span className="flex-1">{deleteError}</span>
+          <button onClick={() => setDeleteError('')} className="text-gray-500 hover:text-white transition-colors text-lg leading-none">×</button>
+        </div>
+      )}
 
       {/* Template selector */}
       <div className="flex items-center gap-3">
@@ -834,6 +848,16 @@ export default function TemplatesPage({ agents, shiftTypes }) {
           onPublish={handlePublish}
         />
       )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete this template?"
+          message="This action cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={confirmDeleteTemplate}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   )
 }
@@ -846,6 +870,8 @@ function PublishPanel({ templateId, onPublish }) {
   const [overwrite, setOverwrite] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [publishResult, setPublishResult] = useState(null) // null | { successCount, errors, weeksCount }
+  const [publishError, setPublishError] = useState('')
 
   const handleApply = (start, end) => {
     setStartDate(`${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`)
@@ -855,15 +881,18 @@ function PublishPanel({ templateId, onPublish }) {
 
   const handlePublish = async () => {
     if (!startDate || !endDate) {
-      alert('Select a date range')
+      setPublishError('Select a date range first.')
       return
     }
     setIsPublishing(true)
+    setPublishResult(null)
+    setPublishError('')
     try {
-      await onPublish(startDate, endDate, overwrite)
+      const result = await onPublish(startDate, endDate, overwrite)
+      setPublishResult(result)
     } catch (error) {
       console.error('Publish failed:', error)
-      alert(`Failed to publish template: ${error.message}`)
+      setPublishError(error.message)
     } finally {
       setIsPublishing(false)
     }
@@ -927,6 +956,34 @@ function PublishPanel({ templateId, onPublish }) {
               </>
             )}
           </button>
+
+          {publishError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-950/60 border border-red-800/60 text-red-300 text-xs">
+              <span className="flex-1">{publishError}</span>
+              <button onClick={() => setPublishError('')} className="text-gray-500 hover:text-white transition-colors text-lg leading-none shrink-0">×</button>
+            </div>
+          )}
+
+          {publishResult && (
+            <div className={`px-3 py-2.5 rounded-lg text-xs border ${
+              publishResult.errors.length > 0
+                ? 'bg-amber-950/60 border-amber-800/60 text-amber-300'
+                : 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300'
+            }`}>
+              <div className="flex items-center gap-1.5 font-medium">
+                {publishResult.errors.length === 0 && <Check size={11} />}
+                Published {publishResult.successCount} agent-day{publishResult.successCount !== 1 ? 's' : ''} across {publishResult.weeksCount} week{publishResult.weeksCount !== 1 ? 's' : ''}
+              </div>
+              {publishResult.errors.length > 0 && (
+                <div className="mt-1.5 space-y-0.5">
+                  <div className="text-red-400 font-medium">{publishResult.errors.length} failed:</div>
+                  {publishResult.errors.map((e, i) => (
+                    <div key={i} className="font-mono text-[10px] text-red-300">{e}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

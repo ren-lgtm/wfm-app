@@ -350,7 +350,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
       onClick={onClose}
     >
       <div
-        className="bg-[#141922] border border-[#2A3245] rounded-xl w-full max-w-sm shadow-2xl"
+        className="bg-[#141922] border border-[#2A3245] rounded-xl w-11/12 max-w-sm shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -1209,6 +1209,13 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           </span>
         )}
       </div>
+
+      {/* Drag conflict toast */}
+      {drag?.conflict && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-950/95 border border-amber-700/60 text-amber-200 text-xs shadow-xl pointer-events-none">
+          <span className="font-semibold">⚠</span> Can't move — overlaps with another shift
+        </div>
+      )}
 
       {/* Shift modal */}
       {shiftModal && (

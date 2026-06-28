@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { UserPlus, X, ChevronDown, Check, Mail, Shield, Star, User, Plus, Loader, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import ConfirmModal from '../components/ConfirmModal'
 
 const ROLES = ['member', 'lead', 'admin']
 const ROLE_LABELS = { member: 'Member', lead: 'Lead', admin: 'Admin' }
@@ -266,7 +267,8 @@ export default function UsersPage({ addAgent }) {
   const [users,      setUsers]      = useState([])
   const [agents,     setAgents]     = useState([])
   const [loading,    setLoading]    = useState(true)
-  const [editingId,  setEditingId]  = useState(null)
+  const [editingId,     setEditingId]     = useState(null)
+  const [confirmRemove, setConfirmRemove] = useState(null) // null | { id, email }
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole,  setInviteRole]  = useState('member')
@@ -342,8 +344,13 @@ export default function UsersPage({ addAgent }) {
     }
   }
 
-  const handleRemove = async (id, email) => {
-    if (!window.confirm(`Remove ${email}?`)) return
+  const handleRemove = (id, email) => {
+    setConfirmRemove({ id, email })
+  }
+
+  const confirmRemoveUser = async () => {
+    const { id } = confirmRemove
+    setConfirmRemove(null)
     await supabase.from('app_users').delete().eq('id', id)
     setUsers(us => us.filter(u => u.id !== id))
   }
@@ -458,8 +465,21 @@ export default function UsersPage({ addAgent }) {
               </button>
             </div>
           </form>
+          {!addName.trim() && (
+            <p className="text-[11px] text-gray-600 mt-2">Enter a name to enable Save.</p>
+          )}
           {addError && <p className="text-[11px] text-red-400 mt-3">{addError}</p>}
         </div>
+      )}
+
+      {confirmRemove && (
+        <ConfirmModal
+          title={`Remove ${confirmRemove.email}?`}
+          message="They will lose access to the app immediately."
+          confirmLabel="Remove"
+          onConfirm={confirmRemoveUser}
+          onCancel={() => setConfirmRemove(null)}
+        />
       )}
 
       {/* Users list */}
