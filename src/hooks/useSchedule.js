@@ -415,17 +415,18 @@ export function useSchedule({ userId } = {}) {
     return weekSchedule[agentId]?.[day] || {}
   }, [weekSchedule])
 
-  // Compute total hours for an agent this week
+  // Compute total worked hours for an agent this week.
+  // Slots are 15-min quarters, so divide the worked-quarter count by 4.
   const getAgentWeekHours = useCallback((agentId) => {
-    let total = 0
+    let quarters = 0
     for (const day of DAYS) {
-      const slots = weekSchedule[agentId]?.[day] || {}
+      const slots = weekSchedule?.[agentId]?.[day] || {}
       if (slots.off) continue
       for (const activity of Object.values(slots)) {
-        if (activity !== 'off' && activity !== 'lunch') total++
+        if (activity !== 'off' && activity !== 'lunch') quarters++
       }
     }
-    return total
+    return quarters / 4
   }, [weekSchedule])
 
   return {

@@ -4,37 +4,41 @@ import { useUndoRedo } from '../hooks/useUndoRedo'
 import { supabase } from '../lib/supabase'
 import { CustomRangePicker } from '../components/CustomRangePicker'
 import { useShiftTypes, DEFAULT_SHIFT_TYPES } from '../hooks/useShiftTypes'
-import { hLabel, getMondayOfWeek, toISODate, DAYS, WORK_START, WORK_END } from '../lib/forecast'
+import { hLabel, qLabel, getMondayOfWeek, toISODate, DAYS, WORK_START, WORK_END } from '../lib/forecast'
 import ConfirmModal from '../components/ConfirmModal'
 
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 const DAYS_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 const HOUR_COL_W = 48
+const QUARTERS_PER_HOUR = 4
+const QUARTERS_PER_DAY = 96
+const QUARTER_W = HOUR_COL_W / QUARTERS_PER_HOUR // 12px
+const ALL_QUARTERS = Array.from({ length: QUARTERS_PER_DAY }, (_, i) => i)
 
 // ─── Modal for editing a shift in the template ───
 
-function ShiftModal({ agent, dow, clickedHour, agentSlots, shiftTypes, onClose, onApply }) {
-  const existingActivity = agentSlots[clickedHour]
+function ShiftModal({ agent, dow, clickedQuarter, agentSlots, shiftTypes, onClose, onApply }) {
+  const existingActivity = agentSlots[clickedQuarter]
   const isEditing = !!existingActivity && existingActivity !== 'off'
 
   const { blockStart, blockEnd } = useMemo(() => {
-    if (!isEditing) return { blockStart: clickedHour, blockEnd: clickedHour }
-    const act = agentSlots[clickedHour]
-    let start = clickedHour, end = clickedHour
+    if (!isEditing) return { blockStart: clickedQuarter, blockEnd: clickedQuarter }
+    const act = agentSlots[clickedQuarter]
+    let start = clickedQuarter, end = clickedQuarter
     while (start > 0 && agentSlots[start - 1] === act) start--
-    while (end < 23 && agentSlots[end + 1] === act) end++
+    while (end < QUARTERS_PER_DAY - 1 && agentSlots[end + 1] === act) end++
     return { blockStart: start, blockEnd: end }
-  }, [isEditing, clickedHour, agentSlots])
+  }, [isEditing, clickedQuarter, agentSlots])
 
   const [channel, setChannel] = useState(() => {
     if (isEditing && shiftTypes?.find(t => t.id === existingActivity)) return existingActivity
     const defaultType = shiftTypes?.find(t => t.id === (agent.default_channel || 'email'))
     return defaultType?.id ?? shiftTypes?.[0]?.id ?? 'email'
   })
-  // endHour is EXCLUSIVE — the time the shift ends (block filling 8..14 = 8am–3pm
-  // shows endHour 15). Stored slots remain inclusive.
-  const [startHour, setStartHour] = useState(blockStart)
-  const [endHour, setEndHour] = useState(blockEnd + 1)
+  // Quarter units (0-95). endQ is EXCLUSIVE — the time the shift ends.
+  // New shifts default to a 1-hour block; edits open at the existing extent.
+  const [startQ, setStartQ] = useState(blockStart)
+  const [endQ, setEndQ] = useState(isEditing ? blockEnd + 1 : Math.min(QUARTERS_PER_DAY, blockStart + QUARTERS_PER_HOUR))
 
   const modalRef = useRef(null)
   useEffect(() => {
@@ -56,21 +60,21 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, shiftTypes, onClose, 
   }, [onClose])
 
   const handleSave = () => {
-    // endHour is exclusive — fill startHour .. endHour-1
+    // endQ is exclusive — fill startQ .. endQ-1 (quarter units)
     const changes = []
     if (isEditing) {
-      for (let h = blockStart; h <= blockEnd; h++) {
-        if (h < startHour || h >= endHour) changes.push({ hour: h, activity: null })
+      for (let q = blockStart; q <= blockEnd; q++) {
+        if (q < startQ || q >= endQ) changes.push({ hour: q, activity: null })
       }
     }
-    for (let h = startHour; h < endHour; h++) changes.push({ hour: h, activity: channel })
+    for (let q = startQ; q < endQ; q++) changes.push({ hour: q, activity: channel })
     onApply(agent.id, dow, changes)
     onClose()
   }
 
   const handleDelete = () => {
     const changes = []
-    for (let h = blockStart; h <= blockEnd; h++) changes.push({ hour: h, activity: null })
+    for (let q = blockStart; q <= blockEnd; q++) changes.push({ hour: q, activity: null })
     onApply(agent.id, dow, changes)
     onClose()
   }
@@ -133,30 +137,30 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, shiftTypes, onClose, 
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">Start time</label>
               <select
-                value={startHour}
+                value={startQ}
                 onChange={e => {
-                  const h = Number(e.target.value)
-                  setStartHour(h)
-                  if (endHour <= h) setEndHour(h + 1)
+                  const q = Number(e.target.value)
+                  setStartQ(q)
+                  if (endQ <= q) setEndQ(q + 1)
                 }}
                 className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
-                {Array.from({ length: 24 }, (_, h) => (
-                  <option key={h} value={h}>{hLabel(h)}</option>
+                {ALL_QUARTERS.map(q => (
+                  <option key={q} value={q}>{qLabel(q)}</option>
                 ))}
               </select>
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">End time</label>
               <select
-                value={endHour}
-                onChange={e => setEndHour(Number(e.target.value))}
+                value={endQ}
+                onChange={e => setEndQ(Number(e.target.value))}
                 className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
-                {Array.from({ length: 24 }, (_, h) => h + 1)
-                  .filter(h => h > startHour)
-                  .map(h => (
-                    <option key={h} value={h}>{hLabel(h % 24)}</option>
+                {Array.from({ length: QUARTERS_PER_DAY }, (_, q) => q + 1)
+                  .filter(q => q > startQ)
+                  .map(q => (
+                    <option key={q} value={q}>{qLabel(q % QUARTERS_PER_DAY)}</option>
                   ))}
               </select>
             </div>
@@ -278,20 +282,21 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
     return <div className="text-gray-400 text-center py-8">Select or create a template to edit</div>
   }
 
-  // Convert a screen X to an hour (0-23) WITHIN the given day's column.
-  // The grid lays out 5 day columns side by side. Rather than guess the
-  // agent-column width, measure the target day column's real left edge from
-  // the DOM (it's tagged with data-day-col) so the math is exact for every day.
-  const clientXToHour = (clientX, day) => {
+  // Convert a screen X to a quarter (0-95) WITHIN the given day's column.
+  // Measures the target day column's real width from the DOM (tagged
+  // data-day-col) so the math is exact for every day and any column width.
+  const clientXToQuarter = (clientX, day) => {
     const container = containerRef.current
     if (!container) return null
     const dayEl = container.querySelector(`[data-day-col="${day}"]`)
     if (!dayEl) return null
-    const x = clientX - dayEl.getBoundingClientRect().left
-    return Math.max(0, Math.min(23, Math.floor(x / HOUR_COL_W)))
+    const rect = dayEl.getBoundingClientRect()
+    const q = Math.floor((clientX - rect.left) / (rect.width / QUARTERS_PER_DAY))
+    return Math.max(0, Math.min(QUARTERS_PER_DAY - 1, q))
   }
 
   const handlePointerMove = (e) => {
+    const MAXQ = QUARTERS_PER_DAY - 1
     // Check if this is a potential shift block drag starting
     if (pointerDownRef.current && !dragStartedRef.current) {
       const dx = Math.abs(e.clientX - pointerDownRef.current.x)
@@ -300,7 +305,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
       if (dx > 12 || dy > 12) {
         dragStartedRef.current = true
         const pd = pointerDownRef.current
-        const h = clientXToHour(e.clientX, pd.day)
+        const q = clientXToQuarter(e.clientX, pd.day)
         setDrag({
           type: 'move',
           agentId: pd.agent.id,
@@ -308,7 +313,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
           origStart: pd.startH,
           origEnd: pd.endH,
           activity: pd.activity,
-          offsetH: h !== null ? h - pd.startH : 0,
+          offsetH: q !== null ? q - pd.startH : 0,
           previewStart: pd.startH,
           previewEnd: pd.endH,
         })
@@ -317,20 +322,20 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
 
     setDrag(currentDrag => {
       if (!currentDrag) return null
-      const h = clientXToHour(e.clientX, currentDrag.day)
-      if (h === null) return currentDrag
+      const q = clientXToQuarter(e.clientX, currentDrag.day)
+      if (q === null) return currentDrag
 
       if (currentDrag.type === 'move') {
         const len = currentDrag.origEnd - currentDrag.origStart
-        const newStart = Math.max(0, Math.min(23 - len, h - currentDrag.offsetH))
+        const newStart = Math.max(0, Math.min(MAXQ - len, q - currentDrag.offsetH))
         const newEnd = newStart + len
         return { ...currentDrag, previewStart: newStart, previewEnd: newEnd }
       } else {
         if (currentDrag.edge === 'right') {
-          const newEnd = Math.max(currentDrag.origStart, Math.min(23, h))
+          const newEnd = Math.max(currentDrag.origStart, Math.min(MAXQ, q))
           return { ...currentDrag, previewEnd: newEnd }
         } else {
-          const newStart = Math.min(currentDrag.origEnd, Math.max(0, h))
+          const newStart = Math.min(currentDrag.origEnd, Math.max(0, q))
           return { ...currentDrag, previewStart: newStart }
         }
       }
@@ -387,9 +392,9 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
     if (changes.length > 0) applyChanges(changes)
   }
 
-  const openShiftModal = (agent, day, startH) => {
+  const openShiftModal = (agent, day, startQ) => {
     const agentDaySlots = localSlotsRef.current[agent.id]?.[day] || {}
-    setShiftModal({ agent, day, clickedHour: startH, agentSlots: agentDaySlots })
+    setShiftModal({ agent, day, clickedQuarter: startQ, agentSlots: agentDaySlots })
   }
 
   return (
@@ -488,21 +493,27 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                     const slots = localSlots[agent.id]?.[day] || {}
                     const isBeingDragged = drag && drag.agentId === agent.id && drag.day === day
 
-                    // Build runs of contiguous activities. While dragging, hide
-                    // only the block being dragged (its original hours) — other
-                    // shifts in the same cell stay visible.
+                    // Build runs of contiguous activities (quarter units). While
+                    // dragging, hide only the block being dragged (its original
+                    // quarters) — other shifts in the same cell stay visible.
                     const runs = []
                     let i = 0
-                    while (i < 24) {
+                    while (i < QUARTERS_PER_DAY) {
                       const h = i
                       const isDraggedBlock = isBeingDragged && h >= drag.origStart && h <= drag.origEnd
                       const act = isDraggedBlock ? null : (slots[h] || null)
                       if (!act) {
-                        runs.push({ startH: h, endH: h, activity: null, span: 1 })
-                        i++
+                        let j = i + 1
+                        while (j < QUARTERS_PER_DAY) {
+                          const draggedJ = isBeingDragged && j >= drag.origStart && j <= drag.origEnd
+                          if ((draggedJ ? null : (slots[j] || null)) !== null) break
+                          j++
+                        }
+                        runs.push({ startH: h, endH: j - 1, activity: null, span: j - i })
+                        i = j
                       } else {
                         let j = i + 1
-                        while (j < 24 && slots[j] === act) j++
+                        while (j < QUARTERS_PER_DAY && slots[j] === act) j++
                         runs.push({ startH: h, endH: j - 1, activity: act, span: j - i })
                         i = j
                       }
@@ -522,13 +533,13 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                           {runs.map(({ startH, activity, span }) => {
                             if (activity) {
                               // Spacer holds the correct width in the flex flow — the absolute shift block renders on top
-                              return <div key={`spacer-${startH}`} style={{ width: `${HOUR_COL_W * span}px`, flexShrink: 0 }} />
+                              return <div key={`spacer-${startH}`} style={{ width: `${QUARTER_W * span}px`, flexShrink: 0 }} />
                             }
                             return (
                               <div
                                 key={`empty-${startH}`}
                                 className="border-r border-[#2A3245] hover:bg-[#2A3245]/20 cursor-pointer active:bg-[#2A3245]/70"
-                                style={{ width: `${HOUR_COL_W * span}px`, height: '100%', flexShrink: 0 }}
+                                style={{ width: `${QUARTER_W * span}px`, height: '100%', flexShrink: 0 }}
                                 onClick={() => openShiftModal(agent, day, startH)}
                               />
                             )
@@ -541,8 +552,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                               style={{
                                 top: '0',
                                 bottom: '0',
-                                left: `${drag.previewStart * HOUR_COL_W}px`,
-                                width: `${(drag.previewEnd - drag.previewStart + 1) * HOUR_COL_W}px`,
+                                left: `${drag.previewStart * QUARTER_W}px`,
+                                width: `${(drag.previewEnd - drag.previewStart + 1) * QUARTER_W}px`,
                                 background: shiftTypes?.find(t => t.id === drag.activity)?.color || '#666',
                                 pointerEvents: 'none',
                               }}
@@ -561,8 +572,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                                 style={{
                                   top: '0',
                                   bottom: '0',
-                                  left: `${startH * HOUR_COL_W}px`,
-                                  width: `${span * HOUR_COL_W}px`,
+                                  left: `${startH * QUARTER_W}px`,
+                                  width: `${span * QUARTER_W}px`,
                                   background: shiftType?.color || '#666',
                                   boxShadow: isBeingDragged ? '0 0 0 2px rgba(255,255,255,0.2)' : undefined,
                                 }}
@@ -637,7 +648,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
         <ShiftModal
           agent={shiftModal.agent}
           dow={shiftModal.day}
-          clickedHour={shiftModal.clickedHour}
+          clickedQuarter={shiftModal.clickedQuarter}
           agentSlots={shiftModal.agentSlots}
           shiftTypes={shiftTypes}
           onClose={() => setShiftModal(null)}

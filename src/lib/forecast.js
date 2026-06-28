@@ -194,6 +194,25 @@ export function hLabel(h) {
   return `${h - 12}pm`
 }
 
+// ── 15-minute (quarter) helpers ──────────────────────────────────────────────
+// Schedules are stored at quarter granularity: quarter q (0-95) is the 15-min
+// block starting at hour=floor(q/4), minute=(q%4)*15. Coverage/forecast stay
+// hourly — aggregate quarters back to hours for that math.
+export const QUARTERS_PER_HOUR = 4
+export const QUARTERS_PER_DAY = 96
+
+export const hourToQuarter = (h) => h * 4
+export const quarterToHour = (q) => Math.floor(q / 4)
+
+// Label for a quarter boundary, e.g. 33 -> "8:15a", 32 -> "8a", 96 -> "12a".
+export function qLabel(q) {
+  const h = Math.floor(q / 4) % 24
+  const m = (q % 4) * 15
+  const ampm = h < 12 ? 'a' : 'p'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`
+}
+
 export function getDayOfWeek(date) {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   return days[new Date(date).getDay()]

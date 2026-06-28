@@ -16,7 +16,11 @@ the invariants that cause bugs if ignored.
 1. **Dates are PT-anchored `YYYY-MM-DD` strings.** Never `new Date("2026-06-28")`
    (parses as UTC, shifts the day). Use helpers in `lib/forecast.js` /
    `TimelineView.jsx` (`parsePTDate`, `addDays`, `toISODate`, `getDayOfWeekIdx`).
-2. **Empty hour = delete the slot row**, never write null.
+2. **Slots are 15-min quarters (0-95)**, stored in the `hour` column of
+   `schedule_slots`/`template_slots` (migration 012). quarter q = hour
+   `floor(q/4)`, minute `(q%4)*15`. Empty quarter = delete the row, never null.
+   Coverage/forecast stay **hourly** — aggregate an agent's 4 quarters to one
+   activity (`dominantHourActivity`, majority ≥2). Worked hours = quarters/4.
 3. **Editing is local-first with explicit Save.** DayView (`TimelineView.jsx`) and
    WeekTemplateGrid (`TemplatesPage.jsx`) hold local slots via `useUndoRedo`;
    edits push snapshots, Save diffs vs canonical. Don't write straight to the DB

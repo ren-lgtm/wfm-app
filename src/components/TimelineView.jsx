@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } fr
 import { ChevronLeft, ChevronRight, X, Copy, Calendar, Undo2, Redo2 } from 'lucide-react'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import {
-  hLabel, getMondayOfWeek, toISODate,
+  hLabel, qLabel, getMondayOfWeek, toISODate,
   BASELINE_EMAIL, BASELINE_PHONE,
   AVG_EMAILS_PER_AGENT_HOUR, AVG_CALLS_PER_AGENT_HOUR,
   agentsNeededPhone, agentsNeededEmail,
@@ -21,6 +21,14 @@ const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 
 // Minimum column width for hour cells (px) — keeps header/cell alignment locked
 const HOUR_COL_W = 48
+const QUARTERS_PER_HOUR = 4
+const QUARTERS_PER_DAY = 96
+const ALL_QUARTERS = Array.from({ length: QUARTERS_PER_DAY }, (_, i) => i)
+// Format a worked-quarter count as hours (e.g. 29 quarters -> "7.25")
+const fmtHours = (quarters) => {
+  const h = quarters / QUARTERS_PER_HOUR
+  return Number.isInteger(h) ? `${h}` : `${parseFloat(h.toFixed(2))}`
+}
 
 // Channel cell styles
 const CHANNEL_STYLES = {
@@ -252,29 +260,30 @@ function useLatestWeekSchedule(agents) {
 
 // ─── Shift Modal ─────────────────────────────────────────────────────────────
 
-function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onClose, onDeleteShift, onApply }) {
-  const existingActivity = agentSlots[clickedHour]
+function ShiftModal({ agent, date, dow, clickedQuarter, agentSlots, shiftTypes, onClose, onDeleteShift, onApply }) {
+  const existingActivity = agentSlots[clickedQuarter]
   const isEditing = !!existingActivity && existingActivity !== 'off'
 
-  // Detect the contiguous block of the same activity around clickedHour
+  // Detect the contiguous block of the same activity around clickedQuarter (quarter units)
   const { blockStart, blockEnd } = useMemo(() => {
-    if (!isEditing) return { blockStart: clickedHour, blockEnd: clickedHour }
-    const act = agentSlots[clickedHour]
-    let start = clickedHour, end = clickedHour
+    if (!isEditing) return { blockStart: clickedQuarter, blockEnd: clickedQuarter }
+    const act = agentSlots[clickedQuarter]
+    let start = clickedQuarter, end = clickedQuarter
     while (start > 0 && agentSlots[start - 1] === act) start--
-    while (end < 23 && agentSlots[end + 1] === act) end++
+    while (end < QUARTERS_PER_DAY - 1 && agentSlots[end + 1] === act) end++
     return { blockStart: start, blockEnd: end }
-  }, [isEditing, clickedHour, agentSlots])
+  }, [isEditing, clickedQuarter, agentSlots])
 
   const [channel, setChannel] = useState(() => {
     if (isEditing && shiftTypes?.find(t => t.id === existingActivity)) return existingActivity
     const defaultType = shiftTypes?.find(t => t.id === (agent.default_channel || 'email'))
     return defaultType?.id ?? shiftTypes?.[0]?.id ?? 'email'
   })
-  // endHour is EXCLUSIVE — the time the shift ends. A block filling slots
-  // 8..14 (8am–3pm) shows endHour = 15 (3pm). Stored slots stay inclusive.
-  const [startHour, setStartHour] = useState(blockStart)
-  const [endHour,   setEndHour]   = useState(blockEnd + 1)
+  // Quarter units (0-95). endQ is EXCLUSIVE — the time the shift ends.
+  // A block filling quarters 32..59 (8:00am–3:00pm) shows endQ = 60 (3:00pm).
+  // New shifts default to a 1-hour block; edits open at the existing extent.
+  const [startQ, setStartQ] = useState(blockStart)
+  const [endQ,   setEndQ]   = useState(isEditing ? blockEnd + 1 : Math.min(QUARTERS_PER_DAY, blockStart + QUARTERS_PER_HOUR))
 
   const modalRef = useRef(null)
   useEffect(() => {
@@ -296,15 +305,15 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onC
   }, [onClose])
 
   const handleSave = () => {
-    // endHour is exclusive — fill startHour .. endHour-1
+    // endQ is exclusive — fill startQ .. endQ-1 (quarter units)
     const changes = []
     if (isEditing) {
-      for (let h = blockStart; h <= blockEnd; h++) {
-        if (h < startHour || h >= endHour) changes.push({ hour: h, activity: null })
+      for (let q = blockStart; q <= blockEnd; q++) {
+        if (q < startQ || q >= endQ) changes.push({ hour: q, activity: null })
       }
     }
-    for (let h = startHour; h < endHour; h++) {
-      changes.push({ hour: h, activity: channel })
+    for (let q = startQ; q < endQ; q++) {
+      changes.push({ hour: q, activity: channel })
     }
     onApply(agent.id, changes)
     onClose()
@@ -312,9 +321,9 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onC
 
   const handleDelete = () => {
     if (onDeleteShift) {
-      onDeleteShift(agent.id, dow, blockStart, blockEnd, agentSlots[clickedHour])
+      onDeleteShift(agent.id, dow, blockStart, blockEnd, agentSlots[clickedQuarter])
     } else {
-      for (let h = blockStart; h <= blockEnd; h++) updateSlot(agent.id, dow, h, null)
+      for (let q = blockStart; q <= blockEnd; q++) updateSlot(agent.id, dow, q, null)
     }
     onClose()
   }
@@ -385,30 +394,30 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onC
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">Start time</label>
               <select
-                value={startHour}
+                value={startQ}
                 onChange={e => {
-                  const h = Number(e.target.value)
-                  setStartHour(h)
-                  if (endHour <= h) setEndHour(h + 1)
+                  const q = Number(e.target.value)
+                  setStartQ(q)
+                  if (endQ <= q) setEndQ(q + 1)
                 }}
                 className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
-                {Array.from({ length: 24 }, (_, h) => (
-                  <option key={h} value={h}>{hLabel(h)}</option>
+                {ALL_QUARTERS.map(q => (
+                  <option key={q} value={q}>{qLabel(q)}</option>
                 ))}
               </select>
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">End time</label>
               <select
-                value={endHour}
-                onChange={e => setEndHour(Number(e.target.value))}
+                value={endQ}
+                onChange={e => setEndQ(Number(e.target.value))}
                 className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
-                {Array.from({ length: 24 }, (_, h) => h + 1)
-                  .filter(h => h > startHour)
-                  .map(h => (
-                    <option key={h} value={h}>{hLabel(h % 24)}</option>
+                {Array.from({ length: QUARTERS_PER_DAY }, (_, q) => q + 1)
+                  .filter(q => q > startQ)
+                  .map(q => (
+                    <option key={q} value={q}>{qLabel(q % QUARTERS_PER_DAY)}</option>
                   ))}
               </select>
             </div>
@@ -599,11 +608,14 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     return () => window.removeEventListener('keydown', onKey)
   }, [canEditAny, undo, redo, isDirty, handleSave])
 
-  function clientXToHour(clientX) {
-    if (!containerRef.current) return null
-    const rect = containerRef.current.getBoundingClientRect()
-    const x = clientX - rect.left + containerRef.current.scrollLeft - 140
-    return Math.max(0, Math.min(23, Math.floor(x / HOUR_COL_W)))
+  // Pointer X → quarter (0-95). Measures the schedule area's real width from the
+  // DOM so it stays correct when columns stretch (w-full table) and on scroll.
+  function clientXToQuarter(clientX) {
+    const el = containerRef.current?.querySelector('[data-schedule-area]')
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    const q = Math.floor((clientX - rect.left) / (rect.width / QUARTERS_PER_DAY))
+    return Math.max(0, Math.min(QUARTERS_PER_DAY - 1, q))
   }
 
   // Returns a modified slots map reflecting the current drag preview
@@ -617,14 +629,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const handlePointerMove = useCallback((e) => {
     if (!drag || !canEditAny) return
     e.preventDefault()
-    const h = clientXToHour(e.clientX)
-    if (h === null) return
+    const q = clientXToQuarter(e.clientX)
+    if (q === null) return
+    const MAXQ = QUARTERS_PER_DAY - 1
     const base = localSlots[drag.agentId] || {}
     const isRealActivity = (a, currentAct) => a && a !== 'off' && a !== currentAct
 
     if (drag.type === 'move') {
       const len      = drag.origEnd - drag.origStart
-      const newStart = Math.max(0, Math.min(23 - len, h - drag.offsetH))
+      const newStart = Math.max(0, Math.min(MAXQ - len, q - drag.offsetH))
       const newEnd   = newStart + len
       let conflict   = false
       for (let i = newStart; i <= newEnd; i++) {
@@ -640,18 +653,18 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
       }))
     } else {
       if (drag.edge === 'right') {
-        let maxEnd = 23
-        for (let i = drag.origEnd + 1; i <= 23; i++) {
+        let maxEnd = MAXQ
+        for (let i = drag.origEnd + 1; i <= MAXQ; i++) {
           if (isRealActivity(base[i], drag.activity)) { maxEnd = i - 1; break }
         }
-        const newEnd = Math.max(drag.origStart, Math.min(maxEnd, h))
+        const newEnd = Math.max(drag.origStart, Math.min(maxEnd, q))
         setDrag(d => ({ ...d, previewEnd: newEnd }))
       } else {
         let minStart = 0
         for (let i = drag.origStart - 1; i >= 0; i--) {
           if (isRealActivity(base[i], drag.activity)) { minStart = i + 1; break }
         }
-        const newStart = Math.min(drag.origEnd, Math.max(minStart, h))
+        const newStart = Math.min(drag.origEnd, Math.max(minStart, q))
         setDrag(d => ({ ...d, previewStart: newStart }))
       }
     }
@@ -707,9 +720,9 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     if (changes.length > 0) handleApplyShift(agentId, changes)
   }, [drag, canEditAny, handleApplyShift])
 
-  const openShiftModal = (agent, h, slots) => {
+  const openShiftModal = (agent, q, slots) => {
     if (!canEditAgent(agent.id) || justDragged.current) return
-    setShiftModal({ agent, clickedHour: h, agentSlots: slots })
+    setShiftModal({ agent, clickedQuarter: q, agentSlots: slots })
   }
 
   // Determine which hours have any activity (to auto-trim the display)
@@ -732,15 +745,27 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     setOverlayLeft(cellRect.left - containerRect.left + containerRef.current.scrollLeft)
   })
 
-  // Per-hour coverage counts
+  // Per-hour coverage counts — aggregate each agent's four 15-min quarters into
+  // one activity for the hour (the channel they work for the majority of it,
+  // ≥2 of 4 quarters). Coverage/forecast stay hourly.
   const coverage = useMemo(() => {
+    const dominantHourActivity = (slots, h) => {
+      let email = 0, phone = 0
+      for (let q = h * QUARTERS_PER_HOUR; q < (h + 1) * QUARTERS_PER_HOUR; q++) {
+        if (slots[q] === 'email') email++
+        else if (slots[q] === 'phone') phone++
+      }
+      if (email >= 2 && email >= phone) return 'email'
+      if (phone >= 2) return 'phone'
+      return null
+    }
     const out = {}
     for (const h of hours) {
       let emailStaff = 0, phoneStaff = 0
       for (const a of agents) {
-        const act = localSlots[a.id]?.[h]
+        const act = dominantHourActivity(localSlots[a.id] || {}, h)
         if (act === 'email') emailStaff++
-        if (act === 'phone') phoneStaff++
+        else if (act === 'phone') phoneStaff++
       }
       out[h] = { emailStaff, phoneStaff }
     }
@@ -972,126 +997,114 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                       <span className="text-xs font-medium text-gray-200 whitespace-nowrap">{agent.name}</span>
                     </div>
                   </td>
-                  {(() => {
-                    const runs = []
-                    let i = 0
-                    while (i < hours.length) {
-                      const h   = hours[i]
-                      const act = slots[h] || null
-                      if (!act || act === 'off') {
-                        runs.push({ startH: h, endH: h, activity: act, span: 1 })
-                        i++
-                      } else {
-                        let j = i + 1
-                        while (j < hours.length && (slots[hours[j]] || null) === act) j++
-                        runs.push({ startH: h, endH: hours[j - 1], activity: act, span: j - i })
-                        i = j
-                      }
-                    }
-
-                    return runs.map(({ startH, endH, activity, span }) => {
-                      const isCurrent    = isToday && startH <= currentHour && currentHour <= endH
-                      const isPast       = isToday && endH < currentHour
-                      const isPhone      = startH >= PHONE_START && endH < PHONE_END
-                      const isPreview    = isBeingDragged && !drag.conflict && drag.type === 'move' && startH === drag.previewStart
-
-                      if (!activity || activity === 'off') {
+                  {/* Schedule area: 24 hourly background cells + quarter-precise blocks */}
+                  <td colSpan={hours.length} data-schedule-area className="relative p-0">
+                    {/* Hourly background grid (tint + click-to-add) */}
+                    <div className="flex w-full h-full">
+                      {hours.map(h => {
+                        const isCurrentH = isToday && h === currentHour
+                        const isPastH    = isToday && h < currentHour
+                        const isPhoneH   = h >= PHONE_START && h < PHONE_END
                         return (
-                          <td
-                            key={startH}
-                            onClick={canEdit ? () => openShiftModal(agent, startH, baseSlots) : undefined}
-                            className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/40 active:bg-[#2A3245]/70' : ''} ${
-                              isCurrent ? 'bg-blue-950/20' : isPhone ? 'bg-emerald-950/20' : ''
-                            }`}
+                          <div
+                            key={h}
+                            onClick={canEdit ? () => openShiftModal(agent, h * QUARTERS_PER_HOUR, baseSlots) : undefined}
+                            className={`flex-1 border-r border-[#1A1F2E]/40 ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/30 active:bg-[#2A3245]/50' : ''} ${
+                              isCurrentH ? 'bg-blue-950/20' : isPhoneH ? 'bg-emerald-950/20' : ''
+                            } ${isPastH ? 'opacity-90' : ''}`}
                           />
                         )
+                      })}
+                    </div>
+
+                    {/* Quarter-precise shift blocks */}
+                    {(() => {
+                      const runs = []
+                      let i = 0
+                      while (i < ALL_QUARTERS.length) {
+                        const act = slots[i] || null
+                        if (!act || act === 'off') { i++; continue }
+                        let j = i + 1
+                        while (j < ALL_QUARTERS.length && (slots[j] || null) === act) j++
+                        runs.push({ startQ: i, endQ: j - 1, activity: act, span: j - i })
+                        i = j
                       }
 
-                      const shiftType = shiftTypes?.find(t => t.id === activity)
-                      const cs        = cellStyle(activity)
-                      const label     = shiftType ? shiftType.name : cs.label
-                      const showHandles = canEdit && !(activity === 'lunch' && span < 2)
+                      return runs.map(({ startQ, endQ, activity, span }) => {
+                        const shiftType = shiftTypes?.find(t => t.id === activity)
+                        const cs        = cellStyle(activity)
+                        const label     = shiftType ? shiftType.name : cs.label
+                        const endHourOf = Math.floor(endQ / QUARTERS_PER_HOUR)
+                        const isPast    = isToday && endHourOf < currentHour
+                        const isPreview = isBeingDragged && !drag.conflict && drag.type === 'move' && startQ === drag.previewStart
+                        const showHandles = canEdit && !(activity === 'lunch' && span < 2)
 
-                      return (
-                        <td
-                          key={startH}
-                          colSpan={span}
-                          title={canEdit ? 'Click to edit · drag to move · drag edges to resize' : undefined}
-                          className={`relative p-0 bg-transparent ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                          onClick={canEdit ? (e) => {
-                            if (!justDragged.current) openShiftModal(agent, startH, baseSlots)
-                          } : undefined}
-                        >
+                        const mkResize = (edge) => (e) => {
+                          e.stopPropagation()
+                          containerRef.current?.setPointerCapture(e.pointerId)
+                          setDrag({
+                            type: 'resize', edge, agentId: agent.id, dow,
+                            origStart: startQ, origEnd: endQ, activity,
+                            previewStart: startQ, previewEnd: endQ, conflict: false,
+                          })
+                        }
+
+                        return (
                           <div
-                            className={`
-                              absolute inset-0 flex items-center justify-center text-center text-[9px] font-medium select-none
+                            key={startQ}
+                            title={canEdit ? 'Click to edit · drag to move · drag edges to resize' : undefined}
+                            className={`absolute top-0 bottom-0 flex items-center justify-center text-center text-[9px] font-medium select-none overflow-hidden
                               ${shiftType ? '' : `${cs.bg} ${cs.text}`}
                               ${isPast ? 'opacity-60' : ''}
                               ${isPreview ? 'opacity-60 ring-1 ring-white/20' : ''}
-                              ${canEdit && !isPreview ? 'hover:brightness-125 transition-all' : ''}
-                            `}
-                            style={shiftType ? { background: shiftType.color + '33', color: shiftType.color } : undefined}
+                              ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''}
+                              ${canEdit && !isPreview ? 'hover:brightness-125 transition-all' : ''}`}
+                            style={{
+                              left:  `${startQ / QUARTERS_PER_DAY * 100}%`,
+                              width: `${span   / QUARTERS_PER_DAY * 100}%`,
+                              ...(shiftType ? { background: shiftType.color + '33', color: shiftType.color } : {}),
+                            }}
+                            onClick={canEdit ? () => { if (!justDragged.current) openShiftModal(agent, startQ, baseSlots) } : undefined}
                             onPointerDown={canEdit ? (e) => {
-                              if (e.target !== e.currentTarget && e.target.dataset.handle) return
+                              if (e.target.dataset.handle) return
                               e.stopPropagation()
                               containerRef.current?.setPointerCapture(e.pointerId)
-                              const h = clientXToHour(e.clientX)
+                              const q = clientXToQuarter(e.clientX)
                               setDrag({
                                 type: 'move', agentId: agent.id, dow,
-                                origStart: startH, origEnd: endH, activity,
-                                offsetH: h !== null ? h - startH : 0,
-                                previewStart: startH, previewEnd: endH, conflict: false,
+                                origStart: startQ, origEnd: endQ, activity,
+                                offsetH: q !== null ? q - startQ : 0,
+                                previewStart: startQ, previewEnd: endQ, conflict: false,
                               })
                             } : undefined}
                           >
-                            {/* Left resize handle */}
                             {showHandles && (
-                              <div
-                                data-handle="left"
-                                title="Drag to resize"
+                              <div data-handle="left" title="Drag to resize"
                                 className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l hover:bg-white/25 z-10"
-                                onPointerDown={(e) => {
-                                  e.stopPropagation()
-                                  containerRef.current?.setPointerCapture(e.pointerId)
-                                  setDrag({
-                                    type: 'resize', edge: 'left', agentId: agent.id, dow,
-                                    origStart: startH, origEnd: endH, activity,
-                                    previewStart: startH, previewEnd: endH, conflict: false,
-                                  })
-                                }}
-                              />
+                                onPointerDown={mkResize('left')} />
                             )}
                             {label}
-                            {/* Right resize handle */}
                             {showHandles && (
-                              <div
-                                data-handle="right"
-                                title="Drag to resize"
+                              <div data-handle="right" title="Drag to resize"
                                 className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r hover:bg-white/25 z-10"
-                                onPointerDown={(e) => {
-                                  e.stopPropagation()
-                                  containerRef.current?.setPointerCapture(e.pointerId)
-                                  setDrag({
-                                    type: 'resize', edge: 'right', agentId: agent.id, dow,
-                                    origStart: startH, origEnd: endH, activity,
-                                    previewStart: startH, previewEnd: endH, conflict: false,
-                                  })
-                                }}
-                              />
+                                onPointerDown={mkResize('right')} />
                             )}
                           </div>
-                        </td>
-                      )
-                    })
-                  })()}
+                        )
+                      })
+                    })()}
+                  </td>
+
                   {/* Total worked hours for this agent/day */}
                   {(() => {
-                    const worked = Object.entries(slots).filter(
+                    const workedQ = Object.entries(slots).filter(
                       ([key, val]) => key !== 'off' && val && val !== 'lunch' && val !== 'off'
                     ).length
+                    const hrs = workedQ / QUARTERS_PER_HOUR
+                    const label = Number.isInteger(hrs) ? `${hrs}h` : `${parseFloat(hrs.toFixed(2))}h`
                     return (
                       <td className="py-1 px-1 text-center border-l border-[#2A3245] text-[10px] font-mono text-gray-400 whitespace-nowrap">
-                        {worked > 0 ? `${worked}h` : <span className="text-gray-700">—</span>}
+                        {workedQ > 0 ? label : <span className="text-gray-700">—</span>}
                       </td>
                     )
                   })()}
@@ -1341,7 +1354,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           agent={shiftModal.agent}
           date={date}
           dow={dow}
-          clickedHour={shiftModal.clickedHour}
+          clickedQuarter={shiftModal.clickedQuarter}
           agentSlots={shiftModal.agentSlots}
           shiftTypes={shiftTypes}
           onClose={() => setShiftModal(null)}
@@ -1481,13 +1494,13 @@ function WeekView({ monday, agents, schedule }) {
                           {cell.email > 0 && (
                             <div className="flex items-center justify-between bg-blue-900/40 rounded px-2 py-0.5">
                               <span className="text-[9px] text-blue-400">Email</span>
-                              <span className="text-[10px] font-mono text-blue-300 font-semibold">{cell.email}h</span>
+                              <span className="text-[10px] font-mono text-blue-300 font-semibold">{fmtHours(cell.email)}h</span>
                             </div>
                           )}
                           {cell.phone > 0 && (
                             <div className="flex items-center justify-between bg-emerald-900/40 rounded px-2 py-0.5">
                               <span className="text-[9px] text-emerald-400">Phone</span>
-                              <span className="text-[10px] font-mono text-emerald-300 font-semibold">{cell.phone}h</span>
+                              <span className="text-[10px] font-mono text-emerald-300 font-semibold">{fmtHours(cell.phone)}h</span>
                             </div>
                           )}
                         </div>
@@ -1495,8 +1508,8 @@ function WeekView({ monday, agents, schedule }) {
                     )
                   })}
                   <td className="py-2 px-3 text-center border-l border-[#2A3245]">
-                    <div className="text-xs font-mono font-semibold text-gray-300">{weekTotal.email + weekTotal.phone}h</div>
-                    <div className="text-[9px] text-gray-600">{((weekTotal.email + weekTotal.phone) / 40 * 100).toFixed(0)}% FTE</div>
+                    <div className="text-xs font-mono font-semibold text-gray-300">{fmtHours(weekTotal.email + weekTotal.phone)}h</div>
+                    <div className="text-[9px] text-gray-600">{(((weekTotal.email + weekTotal.phone) / QUARTERS_PER_HOUR) / 40 * 100).toFixed(0)}% FTE</div>
                   </td>
                 </tr>
               )
@@ -1591,12 +1604,12 @@ function MonthView({ year, month, agents, schedule, monthSchedule, monday, onSel
     const scheduledAgents = []
     for (const agent of agents) {
       const slots = monthSchedule ? getSlotsForMonthDate(agent.id, date) : getSlotsForDate(schedule, agent.id, monday, date)
-      let hrs = 0
-      Object.values(slots).forEach(v => { if (v === 'email' || v === 'phone') hrs++ })
-      if (hrs > 0) {
+      let quarters = 0
+      Object.values(slots).forEach(v => { if (v === 'email' || v === 'phone') quarters++ })
+      if (quarters > 0) {
         emailAgents++
-        totalHours += hrs
-        scheduledAgents.push({ agent, hours: hrs })
+        totalHours += quarters / QUARTERS_PER_HOUR
+        scheduledAgents.push({ agent, hours: quarters / QUARTERS_PER_HOUR })
       }
     }
     const di     = getDayOfWeekIdx(date)
@@ -1792,8 +1805,8 @@ function CustomRangeView({ startDate, endDate, agents, schedule, monday, onSelec
                     >
                       {email + phone > 0 ? (
                         <div className="space-y-0.5">
-                          {email > 0 && <div className="text-[9px] rounded bg-blue-900/50 text-blue-300 font-mono px-1 py-0.5">{email}h</div>}
-                          {phone > 0 && <div className="text-[9px] rounded bg-emerald-900/50 text-emerald-300 font-mono px-1 py-0.5">{phone}h</div>}
+                          {email > 0 && <div className="text-[9px] rounded bg-blue-900/50 text-blue-300 font-mono px-1 py-0.5">{fmtHours(email)}h</div>}
+                          {phone > 0 && <div className="text-[9px] rounded bg-emerald-900/50 text-emerald-300 font-mono px-1 py-0.5">{fmtHours(phone)}h</div>}
                         </div>
                       ) : (
                         <span className="text-[9px] text-gray-700">—</span>
