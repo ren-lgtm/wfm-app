@@ -188,76 +188,6 @@ function useVolumeData(date) {
   return data
 }
 
-// ─── useLatestWeekSchedule — fetches the most recent saved week as a template ──
-//
-// Returns { schedule, weekStart, loading } where schedule has the same
-// agentId → dayOffset(0-6) → { hour: activity } shape the rest of the
-// component uses, or null if nothing is saved yet.
-
-function useLatestWeekSchedule(agents) {
-  const [result, setResult] = useState({ schedule: null, weekStart: null, loading: true })
-
-  useEffect(() => {
-    if (!agents || agents.length === 0) {
-      setResult({ schedule: null, weekStart: null, loading: false })
-      return
-    }
-    let cancelled = false
-
-    async function load() {
-      // Find the most recent week_start that has any schedule rows
-      const { data: weekRows } = await supabase
-        .from('schedules')
-        .select('week_start')
-        .order('week_start', { ascending: false })
-        .limit(1)
-
-      if (cancelled) return
-
-      const weekStart = weekRows?.[0]?.week_start
-      if (!weekStart) {
-        setResult({ schedule: null, weekStart: null, loading: false })
-        return
-      }
-
-      const { data: schedules } = await supabase
-        .from('schedules')
-        .select('*, schedule_slots(*)')
-        .eq('week_start', weekStart)
-
-      if (cancelled) return
-
-      // Convert to agentId → dayOffset(0-6) → { hour: activity }
-      const dow2idx = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }
-      const sched = {}
-      for (const agent of agents) {
-        sched[agent.id] = { 0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {} }
-      }
-      for (const row of (schedules || [])) {
-        const di = dow2idx[row.day_of_week]
-        if (di === undefined) continue
-        if (!sched[row.agent_id]) continue
-        if (row.is_off) {
-          sched[row.agent_id][di] = null
-        } else {
-          const slots = {}
-          for (const slot of row.schedule_slots || []) {
-            slots[slot.hour] = slot.activity
-          }
-          sched[row.agent_id][di] = slots
-        }
-      }
-
-      setResult({ schedule: sched, weekStart, loading: false })
-    }
-
-    load()
-    return () => { cancelled = true }
-  }, [agents?.map(a => a.id).join(',')])
-
-  return result
-}
-
 // ─── Shift Modal ─────────────────────────────────────────────────────────────
 
 function ShiftModal({ agent, date, dow, clickedQuarter, agentSlots, shiftTypes, onClose, onDeleteShift, onApply }) {
@@ -461,46 +391,12 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
 
-  // Check if the current schedule has any data for this specific day
-  const hasDayData = useMemo(() => {
-    for (const agent of agents) {
-      const slots = getSlotsForDate(schedule, agent.id, monday, date)
-      if (Object.keys(slots).length > 0) return true
-    }
-    return false
-  }, [agents, schedule, monday, date])
-
-  // Fetch the most-recent saved week as a fallback template
-  const { schedule: templateSchedule, weekStart: templateWeekStart, loading: templateLoading } =
-    useLatestWeekSchedule(hasDayData ? [] : agents)  // skip fetch when we have live data
-
-  // Whether the parent has already loaded the correct week for this date.
-  // If monday matches the date's week, we're showing live data (even if empty for this day).
-  const dateMondayStr = toISODate(getMondayOfWeek(date))
-  const isSameWeek    = toISODate(monday) === dateMondayStr
-
-  // The schedule source we actually render:
-  // - live data for this date if it exists
-  // - show template ONLY when the correct week isn't loaded yet and we have a fallback
-  // - never show template if we're already on the correct week (empty weekend = editable empty)
-  const isTemplate = !hasDayData && !!templateSchedule && !isSameWeek
-  const effectiveSchedule = isTemplate ? templateSchedule : schedule
-  const effectiveMonday   = isTemplate
-    ? parsePTDate(templateWeekStart) // treat template monday as anchor
-    : monday
-
-  // For the template: we want the same day-of-week (0-6), not offset from today's monday.
-  function getSlotsForRender(agentId) {
-    if (isTemplate) return effectiveSchedule[agentId]?.[dayIdx] || {}
-    return getSlotsForDate(schedule, agentId, monday, date)
-  }
-
-  // Canonical slots from DB (source of truth for save/diff)
+  // Canonical slots from DB for this date (source of truth for save/diff).
   const canonicalSlots = useMemo(() => {
     const m = {}
-    for (const a of agents) m[a.id] = getSlotsForRender(a.id)
+    for (const a of agents) m[a.id] = getSlotsForDate(schedule, a.id, monday, date)
     return m
-  }, [agents, effectiveSchedule, dayIdx, isTemplate, monday, date])
+  }, [agents, schedule, monday, date])
 
   // Local editable state with undo/redo — all edits land here, not in DB
   const { current: localSlots, canUndo, canRedo, isDirty, push, undo, redo, reset } = useUndoRedo(canonicalSlots)
@@ -514,9 +410,8 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     if (!isDirtyRef.current) reset(canonicalSlots)
   }, [canonicalSig]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Shift modal state — only enabled when showing live (non-template) data
   // Members can only edit their own agent row
-  const canEditAny = !!updateSlot && !isTemplate
+  const canEditAny = !!updateSlot
   const canEditAgent = (agId) => {
     if (!canEditAny) return false
     if (userRole === 'member') return agId === userAgentId
@@ -809,27 +704,8 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     return s === 'past' || s === 'current' ? 'actual' : 'fcst'
   }
 
-  // Template banner text
-  const templateBanner = isTemplate && templateWeekStart
-    ? `Showing last saved schedule (week of ${parsePTDate(templateWeekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}) as template — no schedule saved for this date yet`
-    : null
-
   return (
     <div className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden">
-
-      {/* Template banner */}
-      {templateBanner && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-indigo-950/60 border-b border-indigo-800/50">
-          <span className="text-[10px] text-indigo-300">{templateBanner}</span>
-        </div>
-      )}
-
-      {/* Loading state for template fetch */}
-      {!hasDayData && templateLoading && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-[#0C0F14] border-b border-[#2A3245]">
-          <span className="text-[10px] text-gray-600">Loading template…</span>
-        </div>
-      )}
 
       {/* ── Unsaved changes bar ── */}
       {canEditAny && isDirty && (
