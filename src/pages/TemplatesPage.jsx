@@ -418,7 +418,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                       })) : []
 
                     return (
-                      <td key={day} className="border-r border-[#2A3245] p-0 bg-[#0C0F14]" style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
+                      <td key={day} className="border-r border-[#2A3245] p-0 bg-[#141922]" style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
                         <div className="flex relative w-full h-full">
                           {/* Empty cells */}
                           {runs.map(({ startH, endH, activity, span }) => {
