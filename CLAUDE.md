@@ -25,12 +25,20 @@ the invariants that cause bugs if ignored.
    WeekTemplateGrid (`TemplatesPage.jsx`) hold local slots via `useUndoRedo`;
    edits push snapshots, Save diffs vs canonical. Don't write straight to the DB
    on every edit. The dirty-guard sync must not clobber unsaved edits.
-4. **Drag hour math is per-column.** Templates measures the real day-column left
-   edge from the DOM (`[data-day-col]`) — do NOT hardcode a column-width guess
-   (that broke Tue–Fri resizing before).
-5. **Shift blocks fill the cell** (no inset/rounding) — the cell bg is white in
+4. **Drag/resize coords are measured from the DOM, in quarters.** Both grids
+   read a reference element's real rect and divide by 96 — Templates uses the
+   day column (`[data-day-col]`), Timeline uses the schedule area
+   (`[data-schedule-area]`). Do NOT hardcode a column-width guess (that broke
+   Tue–Fri resizing before).
+5. **Timeline block clicks come from `handlePointerUp`, not `onClick`.** The drag
+   sets `setPointerCapture`, which swallows the block's native `click`. So
+   "click a block to edit" is detected in pointer-up when the pointer didn't
+   move. Also: a click-to-add layer needs `absolute inset-0`, not `h-full`
+   (which collapses to 0 height inside a table cell — empty cells become
+   unclickable).
+6. **Shift blocks fill the cell** (no inset/rounding) — the cell bg is white in
    light mode, so any gap shows as a white outline.
-6. **Theming + brand color are CSS overrides in `index.css`**, not per-component.
+7. **Theming + brand color are CSS overrides in `index.css`**, not per-component.
    Brand `#4F7EF8` is a global remap of `bg-blue-600`/`hover:bg-blue-500`/etc.
    `bg-blue-900/60` & `text-blue-300` (email coverage) are semantic — leave them.
 

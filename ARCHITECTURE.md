@@ -71,7 +71,7 @@ src/
     ForecastChart.jsx      Volume/SLA/targets charts
     ConfirmModal.jsx       Shared styled confirm dialog (use instead of window.confirm)
     AgentModal, CustomRangePicker, GapBadge, ScheduleGrid, WeeklySummary
-supabase/migrations/       Numbered SQL migrations (001…011)
+supabase/migrations/       Numbered SQL migrations (001…012)
 ```
 
 ---
@@ -83,10 +83,11 @@ supabase/migrations/       Numbered SQL migrations (001…011)
 - **schedules** — one row per `(week_start, agent_id, day_of_week)`.
   `week_start` is **always a Monday** (date). `is_off` flags a day off.
   Unique on `(week_start, agent_id, day_of_week)`.
-- **schedule_slots** — one row per `(schedule_id, hour)`; `hour` 0–23,
-  `activity` = a shift-type id (`'phone'|'email'|'lunch'` + custom types).
-  Migration 009 removed the hard CHECK constraint so custom shift types work.
-  An "empty" hour = **no row** (we delete rather than store null).
+- **schedule_slots** — one row per `(schedule_id, hour)`; the `hour` column is a
+  **15-minute quarter index 0–95** (migration 012): quarter q = hour `floor(q/4)`,
+  minute `(q%4)*15`. `activity` = a shift-type id (`'phone'|'email'|'lunch'` +
+  custom types). Migration 009 removed the activity CHECK so custom types work.
+  An "empty" quarter = **no row** (we delete rather than store null).
 - **schedule_templates / template_schedules / template_slots** — same shape as
   schedules, but template-scoped instead of week-scoped. Published into real
   `schedules` rows by `TemplatesPage.handleSaveTemplate` / publish panel.
@@ -97,7 +98,10 @@ supabase/migrations/       Numbered SQL migrations (001…011)
 - **day_notes** — per-day free-text notes.
 
 The in-memory schedule shape used throughout the UI:
-`weekSchedule[agentId][dayOfWeek] = { [hour]: activity }` (or `{ off: true }`).
+`weekSchedule[agentId][dayOfWeek] = { [quarter]: activity }` (or `{ off: true }`),
+where `quarter` is the 0–95 index. Coverage/forecast collapse each agent's four
+quarters in an hour down to one activity (`dominantHourActivity`, majority ≥2),
+so all staffing math stays hourly; worked hours = worked-quarters / 4.
 
 ---
 
@@ -109,10 +113,11 @@ Single source of truth for coverage logic. Key constants:
 - SLA target 95%; gap thresholds green ≥80%, amber ≥50%, else red
 
 Key functions: `agentsNeededPhone/Email`, `getPhoneGap/getEmailGap`,
-`phoneAnswerRate/emailAnswerRate`, `buildForecast`, plus date helpers
-`getMondayOfWeek`, `toISODate`, `hLabel`. **Use these everywhere** — both
-`CoverageBar` and the timeline coverage rows call the same functions so the
-two views never disagree.
+`phoneAnswerRate/emailAnswerRate`, `buildForecast`, date helpers
+`getMondayOfWeek`, `toISODate`, `hLabel`, and 15-min helpers `qLabel`,
+`hourToQuarter`/`quarterToHour`, `QUARTERS_PER_HOUR/DAY`. **Use these
+everywhere** — the timeline coverage rows call the same staffing functions so
+views never disagree. (`CoverageBar.jsx` is dead code — not rendered anywhere.)
 
 ---
 
@@ -125,10 +130,12 @@ day. Use the helpers: `parsePTDate`, `addDays`, `toISODate`, `getDayOfWeekIdx`
 (Zeller's congruence, avoids `getDay()` TZ bugs). The timeline shows PT hours
 with an ET label row; hour columns are PT column indices.
 
-### 2. The slot model: empty = no row
-Writing an empty hour means **deleting** the `schedule_slots` row, not writing
-null. `updateSlot`/`batchUpdateSlots` handle this. Respect it or you'll get
-phantom slots.
+### 2. The slot model: 15-min quarters, empty = no row
+Slots are **15-minute quarters (0–95)** stored in the `hour` column (migration
+012). Writing an empty quarter means **deleting** the `schedule_slots` row, not
+writing null. `batchUpdateSlots` handles this. Coverage/forecast stay hourly via
+`dominantHourActivity`; worked hours = quarters / 4. Shift "End" time is
+**exclusive** (3pm = ends at 3:00, fills up to but not the 3:00 quarter).
 
 ### 3. Editing is local-first with explicit Save (undo/redo)
 `TimelineView` DayView and `TemplatesPage` WeekTemplateGrid both keep a **local**
@@ -142,15 +149,24 @@ rewrite for templates).
 - Coverage bars & hour totals compute from `localSlots`, so they update live.
 - Keyboard: Cmd/Ctrl+Z undo, +Shift redo (or Cmd+Y), Cmd+S save.
 
-### 4. Drag/resize hour math must be per-column
-Pointer-X → hour conversion must account for which column you're over.
-- Timeline (single day): `clientXToHour` subtracts the 140px agent column.
-- Templates (5 day columns): **measures the real day-column left edge from the
-  DOM** via `[data-day-col="Tue"]` — do NOT reintroduce a hardcoded column-width
-  guess, that's what broke Tue–Fri resizing historically.
-Both views use pointer capture (`setPointerCapture`) + edge auto-scroll. During a
-drag, only the dragged block's original hours are hidden; other shifts stay
-visible.
+### 4. Drag/resize coords are DOM-measured, in quarters
+Pointer-X → quarter (0–95) measures a reference element's real rect and divides
+by 96 — Timeline reads `[data-schedule-area]`, Templates reads
+`[data-day-col="Tue"]`. Do NOT reintroduce a hardcoded column-width guess —
+that's what broke Tue–Fri resizing historically. Both views use pointer capture
+(`setPointerCapture`) + edge auto-scroll. During a drag, only the dragged block's
+original quarters are hidden; other shifts stay visible.
+
+### 4b. Timeline rendering & block clicks
+Timeline agent rows are one `colSpan` cell (`[data-schedule-area]`) with an
+absolute hourly background grid (tint + click-to-add) + absolutely-positioned,
+quarter-precise shift blocks (`left`/`width` as % of 96). Headers, coverage
+rows, the current-hour overlay, and Week/Month/Custom views stay hourly and
+table-based. Two traps: (a) the background layer must be `absolute inset-0`, not
+`h-full` (which collapses to 0 inside a `<td>`, making empty cells unclickable);
+(b) a block's `onClick` is swallowed by the drag's pointer capture, so
+"click-to-edit" is detected in `handlePointerUp` when the pointer didn't move —
+not via `onClick`.
 
 ### 5. Blocks fill the cell; light-mode white was an inset bug
 Shift blocks are positioned to fill the whole cell (timeline: `td` is
