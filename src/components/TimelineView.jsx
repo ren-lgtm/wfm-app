@@ -271,8 +271,10 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onC
     const defaultType = shiftTypes?.find(t => t.id === (agent.default_channel || 'email'))
     return defaultType?.id ?? shiftTypes?.[0]?.id ?? 'email'
   })
+  // endHour is EXCLUSIVE — the time the shift ends. A block filling slots
+  // 8..14 (8am–3pm) shows endHour = 15 (3pm). Stored slots stay inclusive.
   const [startHour, setStartHour] = useState(blockStart)
-  const [endHour,   setEndHour]   = useState(blockEnd)
+  const [endHour,   setEndHour]   = useState(blockEnd + 1)
 
   const modalRef = useRef(null)
   useEffect(() => {
@@ -294,13 +296,14 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onC
   }, [onClose])
 
   const handleSave = () => {
+    // endHour is exclusive — fill startHour .. endHour-1
     const changes = []
     if (isEditing) {
       for (let h = blockStart; h <= blockEnd; h++) {
-        if (h < startHour || h > endHour) changes.push({ hour: h, activity: null })
+        if (h < startHour || h >= endHour) changes.push({ hour: h, activity: null })
       }
     }
-    for (let h = startHour; h <= endHour; h++) {
+    for (let h = startHour; h < endHour; h++) {
       changes.push({ hour: h, activity: channel })
     }
     onApply(agent.id, changes)
@@ -386,7 +389,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onC
                 onChange={e => {
                   const h = Number(e.target.value)
                   setStartHour(h)
-                  if (endHour < h) setEndHour(h)
+                  if (endHour <= h) setEndHour(h + 1)
                 }}
                 className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
@@ -402,10 +405,10 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, shiftTypes, onC
                 onChange={e => setEndHour(Number(e.target.value))}
                 className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
-                {Array.from({ length: 24 }, (_, h) => h)
-                  .filter(h => h >= startHour)
+                {Array.from({ length: 24 }, (_, h) => h + 1)
+                  .filter(h => h > startHour)
                   .map(h => (
-                    <option key={h} value={h}>{hLabel(h)}</option>
+                    <option key={h} value={h}>{hLabel(h % 24)}</option>
                   ))}
               </select>
             </div>
