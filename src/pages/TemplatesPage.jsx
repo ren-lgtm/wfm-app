@@ -33,6 +33,25 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
   const [startHour, setStartHour] = useState(blockStart)
   const [endHour, setEndHour] = useState(blockEnd)
 
+  const modalRef = useRef(null)
+  useEffect(() => {
+    const modal = modalRef.current
+    if (!modal) return
+    const focusable = Array.from(modal.querySelectorAll(
+      'button:not([disabled]), select, input, [tabindex]:not([tabindex="-1"])'
+    ))
+    if (focusable.length) focusable[0].focus()
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab' || !focusable.length) return
+      const first = focusable[0], last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   const handleSave = () => {
     if (isEditing) {
       for (let h = blockStart; h <= blockEnd; h++) {
@@ -60,6 +79,7 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         className="bg-[#141922] border border-[#2A3245] rounded-xl w-full max-w-sm shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
@@ -79,7 +99,7 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
             <p className="text-[11px] text-gray-500 mt-0.5">{agent.name} · {dow}</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1">
-            <span className="text-xl">×</span>
+            <X size={16} />
           </button>
         </div>
 
@@ -145,7 +165,7 @@ function ShiftModal({ agent, dow, clickedHour, agentSlots, updateSlot, shiftType
           {isEditing ? (
             <button
               onClick={handleDelete}
-              className="px-3 py-1.5 text-xs bg-red-950/50 border border-red-800/60 text-red-300 hover:text-red-200 hover:bg-red-950/70 rounded-lg transition-colors font-medium"
+              className="px-3 py-1.5 text-xs bg-red-700 hover:bg-red-600 text-white rounded-lg transition-colors font-medium"
             >
               Delete
             </button>

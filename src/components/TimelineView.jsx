@@ -899,7 +899,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                           <td
                             key={startH}
                             onClick={canEdit ? () => openShiftModal(agent, startH, baseSlots) : undefined}
-                            className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/40' : ''} ${
+                            className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-pointer hover:bg-[#2A3245]/40 active:bg-[#2A3245]/70' : ''} ${
                               isCurrent ? 'bg-blue-950/20' : isPhone ? 'bg-emerald-950/20' : ''
                             }`}
                           />
@@ -1201,13 +1201,13 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
 
       {/* Legend */}
       <div className="px-4 py-2.5 border-t border-[#2A3245] flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-gray-500">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-900/60 inline-block" /> Email</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-900/60 inline-block" /> Phone</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900/50 inline-block" /> Lunch</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-900/60 shrink-0 inline-block" /> Email</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-900/60 shrink-0 inline-block" /> Phone</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900/50 shrink-0 inline-block" /> Lunch</span>
         <span className="text-gray-700">·</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-900/60 border border-emerald-700/50 inline-block" /> Covered</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900/60 border border-amber-700/50 inline-block" /> Understaffed</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-900/60 border border-red-700/50 inline-block" /> Critical gap</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-900/60 border border-emerald-700/50 shrink-0 inline-block" /> Covered</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900/60 border border-amber-700/50 shrink-0 inline-block" /> Understaffed</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-900/60 border border-red-700/50 shrink-0 inline-block" /> Critical gap</span>
         <span className="text-gray-700">·</span>
         <span className="text-gray-600">Volume: bold = actual data, dim = forecast</span>
         {isToday && (
@@ -1331,7 +1331,7 @@ function WeekView({ monday, agents, schedule }) {
               {days.map((d, i) => {
                 const isWeekend = i >= 5
                 return (
-                  <th key={i} className={`py-3 px-3 text-center min-w-[100px] ${isWeekend ? 'text-gray-600' : 'text-gray-300'}`}>
+                  <th key={i} className={`py-3 px-3 text-center min-w-[100px] ${isWeekend ? 'text-gray-600 bg-[#0C0F14]/60' : 'text-gray-300'}`}>
                     <div className="font-semibold">{DAYS_SHORT[i]}</div>
                     <div className="text-[10px] text-gray-500 font-mono">{formatDate(d, { month: 'short', day: 'numeric' })}</div>
                   </th>
@@ -1369,13 +1369,13 @@ function WeekView({ monday, agents, schedule }) {
                     const isWeekend = di >= 5
                     if (cell.isOff) {
                       return (
-                        <td key={di} className={`py-2 px-3 text-center ${isWeekend ? 'opacity-30' : ''}`}>
+                        <td key={di} className={`py-2 px-3 text-center ${isWeekend ? 'bg-[#0C0F14]/60 opacity-40' : ''}`}>
                           <span className="text-[10px] text-gray-700">Off</span>
                         </td>
                       )
                     }
                     return (
-                      <td key={di} className="py-2 px-3">
+                      <td key={di} className={`py-2 px-3 ${isWeekend ? 'bg-[#0C0F14]/60' : ''}`}>
                         <div className="flex flex-col gap-0.5">
                           {cell.email > 0 && (
                             <div className="flex items-center justify-between bg-blue-900/40 rounded px-2 py-0.5">
@@ -1569,7 +1569,7 @@ function MonthView({ year, month, agents, schedule, monthSchedule, monday, onSel
                       {agentsToShow.map(({ agent }) => (
                         <div key={agent.id} className="flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: agent.color }} />
-                          <span className="text-[8px] text-gray-400 truncate">{agent.name.split(' ')[0]}</span>
+                          <span className="text-[8px] text-gray-400 truncate">{agent.name}</span>
                         </div>
                       ))}
                       {moreCount > 0 && (

@@ -333,7 +333,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
           <button
             onClick={signOut}
             aria-label="Sign out"
-            title="Sign out"
+            title={user?.email ?? 'Sign out'}
             className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-gray-500 hover:text-red-400 hover:bg-[#1A1F2E] w-full ${!sidebarOpen ? 'justify-center' : ''}`}
           >
             <LogOut size={15} className="shrink-0" />
@@ -411,7 +411,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-4">
                   <div className="text-xs text-gray-500 mb-1">Answer rate · {viewInfo.label}</div>
                   <div
-                    className={`text-2xl font-mono font-medium ${kpis && kpis.answerRate !== null ? slaColor(kpis.answerRate) : 'text-gray-600'}`}
+                    className={`text-2xl font-mono font-medium ${kpis && kpis.answerRate !== null ? slaColor(kpis.answerRate) : 'text-gray-400'}`}
                     title={kpis && kpis.answerRate === null ? 'No SLA data for this period — calculated from historical phone records once available' : undefined}
                   >
                     {kpis && kpis.answerRate !== null ? `${kpis.answerRate}%` : '—'}
