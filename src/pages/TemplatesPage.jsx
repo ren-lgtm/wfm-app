@@ -177,6 +177,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   const [drag, setDrag] = useState(null)
   const dragRef = useRef(null)
   const containerRef = useRef(null)
+  const outerRef = useRef(null)
   const pointerDownRef = useRef(null)
   const dragStartedRef = useRef(false)
 
@@ -204,8 +205,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
     if (pointerDownRef.current && !dragStartedRef.current) {
       const dx = Math.abs(e.clientX - pointerDownRef.current.x)
       const dy = Math.abs(e.clientY - pointerDownRef.current.y)
-      // If moved more than 5px, treat as drag start
-      if (dx > 5 || dy > 5) {
+      // If moved more than 12px, treat as drag start (matches standard touch threshold)
+      if (dx > 12 || dy > 12) {
         dragStartedRef.current = true
         const h = clientXToHour(e.clientX)
         const pd = pointerDownRef.current
@@ -232,11 +233,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
         const len = currentDrag.origEnd - currentDrag.origStart
         const newStart = Math.max(0, Math.min(23 - len, h - currentDrag.offsetH))
         const newEnd = newStart + len
-        return {
-          ...currentDrag,
-          previewStart: newStart,
-          previewEnd: newEnd,
-        }
+        return { ...currentDrag, previewStart: newStart, previewEnd: newEnd }
       } else {
         if (currentDrag.edge === 'right') {
           const newEnd = Math.max(currentDrag.origStart, Math.min(23, h))
@@ -247,9 +244,20 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
         }
       }
     })
+
+    // Auto-scroll when dragging near horizontal edges
+    if (containerRef.current && dragRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const ZONE = 80
+      const distRight = rect.right - e.clientX
+      const distLeft  = e.clientX  - rect.left
+      if (distRight > 0 && distRight < ZONE) containerRef.current.scrollLeft += (ZONE - distRight) / ZONE * 16
+      else if (distLeft > 0 && distLeft < ZONE) containerRef.current.scrollLeft -= (ZONE - distLeft) / ZONE * 16
+    }
   }
 
   const handlePointerUp = (e) => {
+    outerRef.current?.releasePointerCapture(e.pointerId)
     // If pointer down was on a shift block but no drag started, it's a click - open modal
     if (pointerDownRef.current && !dragStartedRef.current) {
       const pd = pointerDownRef.current
@@ -298,10 +306,11 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
   return (
     <>
       <div
+        ref={outerRef}
         className="bg-[#141922] border border-[#2A3245] rounded-xl overflow-hidden"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerLeave={() => setDrag(null)}
+        onPointerLeave={() => { pointerDownRef.current = null; dragStartedRef.current = false; setDrag(null) }}
         style={drag ? { userSelect: 'none' } : undefined}
       >
         <div className="overflow-x-auto" ref={containerRef}>
@@ -439,6 +448,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                 }}
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
+                                  outerRef.current?.setPointerCapture(e.pointerId)
                                   pointerDownRef.current = {
                                     x: e.clientX,
                                     y: e.clientY,
@@ -450,13 +460,16 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                     slots,
                                   }
                                 }}
-                                title="Click to edit or drag to move"
+                                title="Click to edit · drag to move · drag edges to resize"
                               >
                                 {/* Left resize handle */}
                                 <div
-                                  className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-white/30 rounded-l"
+                                  className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-white/30 rounded-l"
+                                  title="Drag to resize"
                                   onPointerDown={(e) => {
                                     e.stopPropagation()
+                                    outerRef.current?.setPointerCapture(e.pointerId)
+                                    dragStartedRef.current = true
                                     setDrag({
                                       type: 'resize',
                                       edge: 'left',
@@ -471,14 +484,17 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                                   }}
                                 />
                                 {/* Label */}
-                                <div className="text-[9px] font-medium text-white px-1 leading-tight select-none pointer-events-none">
+                                <div className="text-[9px] font-medium text-white px-1.5 leading-tight select-none pointer-events-none overflow-hidden whitespace-nowrap text-ellipsis">
                                   {label}
                                 </div>
                                 {/* Right resize handle */}
                                 <div
-                                  className="absolute right-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-white/30 rounded-r"
+                                  className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-white/30 rounded-r"
+                                  title="Drag to resize"
                                   onPointerDown={(e) => {
                                     e.stopPropagation()
+                                    outerRef.current?.setPointerCapture(e.pointerId)
+                                    dragStartedRef.current = true
                                     setDrag({
                                       type: 'resize',
                                       edge: 'right',

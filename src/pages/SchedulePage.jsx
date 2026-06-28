@@ -61,7 +61,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
 
   const {
     agents, currentMonday, weekSchedule, monthSchedule, forecast, slaData, saving, saveError, loadError,
-    copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot, addAgent, loadMonth,
+    copyLastWeek, goNextWeek, goPrevWeek, goToWeek, updateSlot, batchUpdateSlots, addAgent, loadMonth,
   } = useSchedule({ userId: user?.id })
 
   const {
@@ -462,6 +462,7 @@ export default function SchedulePage({ theme, toggleTheme }) {
                 onCopyLastWeek={handleCopyLastWeek}
                 copyMsg={copyMsg}
                 loadMonth={loadMonth}
+                batchUpdateSlots={batchUpdateSlots}
               />
             </>
           )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { getMondayOfWeek, toISODate, buildForecast, DAYS } from '../lib/forecast'
 
@@ -6,6 +6,8 @@ export function useSchedule({ userId } = {}) {
   const [agents, setAgents] = useState([])
   const [currentMonday, setCurrentMonday] = useState(() => getMondayOfWeek(new Date()))
   const [weekSchedule, setWeekSchedule] = useState(null) // { agentId: { Mon: { hour: activity } } }
+  const weekScheduleRef = useRef(null)
+  useEffect(() => { weekScheduleRef.current = weekSchedule }, [weekSchedule])
 
   const [monthSchedule, setMonthSchedule] = useState({}) // { agentId: { dateStr: { hour: activity } } } for entire month
   const [forecast, setForecast] = useState({ phoneForecast: {}, emailForecast: {} })
@@ -335,6 +337,58 @@ export function useSchedule({ userId } = {}) {
     setAgents(prev => prev.filter(a => a.id !== id))
   }, [])
 
+  // Batch-write multiple slot changes for one agent/day with an optimistic UI update.
+  // Clears the drag state immediately (no round-trip wait), rolls back on DB error.
+  const batchUpdateSlots = useCallback(async (agentId, day, changes) => {
+    const weekStart = currentMonday
+    const prevSnapshot = weekScheduleRef.current
+
+    // Optimistic update
+    setWeekSchedule(prev => {
+      const agentDays = { ...(prev?.[agentId] || {}) }
+      const daySlots  = { ...(agentDays[day] || {}) }
+      for (const { hour, activity } of changes) {
+        if (activity === null) delete daySlots[hour]
+        else daySlots[hour] = activity
+      }
+      agentDays[day] = daySlots
+      return { ...(prev || {}), [agentId]: agentDays }
+    })
+
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const { data: sched, error: schedErr } = await supabase
+        .from('schedules')
+        .upsert(
+          { week_start: weekStart, agent_id: agentId, day_of_week: day, is_off: false },
+          { onConflict: 'week_start,agent_id,day_of_week' }
+        )
+        .select()
+        .single()
+
+      if (schedErr) throw new Error(`schedules upsert: ${schedErr.message}`)
+      if (!sched)   throw new Error('schedules upsert returned no row')
+
+      const results = await Promise.all(changes.map(({ hour, activity }) =>
+        activity === null
+          ? supabase.from('schedule_slots').delete().eq('schedule_id', sched.id).eq('hour', hour)
+          : supabase.from('schedule_slots').upsert(
+              { schedule_id: sched.id, hour, activity },
+              { onConflict: 'schedule_id,hour' }
+            )
+      ))
+      const failed = results.find(r => r.error)
+      if (failed) throw new Error(failed.error.message)
+    } catch (err) {
+      console.error('[batchUpdateSlots] Save failed:', err)
+      setSaveError(err.message)
+      setWeekSchedule(prevSnapshot)
+    } finally {
+      setSaving(false)
+    }
+  }, [currentMonday])
+
   // Navigate weeks
   const goToWeek = useCallback((monday) => setCurrentMonday(monday), [])
 
@@ -378,7 +432,7 @@ export function useSchedule({ userId } = {}) {
     agents, currentMonday, weekSchedule, monthSchedule, forecast, slaData, loading, saving,
     saveError, loadError,
     dayNotes, updateDayNote,
-    updateSlot, markOff, unmarkOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
+    updateSlot, batchUpdateSlots, markOff, unmarkOff, copyLastWeek, addAgent, updateAgent, deactivateAgent,
     goToWeek, goNextWeek, goPrevWeek, getSlots, getAgentWeekHours,
     loadMonth,
   }

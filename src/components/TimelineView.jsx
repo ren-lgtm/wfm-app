@@ -445,7 +445,7 @@ function ShiftModal({ agent, date, dow, clickedHour, agentSlots, updateSlot, shi
 
 // ─── Day View ─────────────────────────────────────────────────────────────────
 
-function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, shiftTypes, handleRate, userRole, userAgentId }) {
+function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast, updateSlot, batchUpdateSlots, shiftTypes, handleRate, userRole, userAgentId }) {
   const dayIdx    = getDayOfWeekIdx(date)
   const dow       = DAYS_SHORT[dayIdx]          // 'Mon' … 'Sun'
   const actualVol = useVolumeData(date)         // actual DB volume for this date
@@ -580,59 +580,57 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         setDrag(d => ({ ...d, previewStart: newStart }))
       }
     }
+
+    // Auto-scroll when dragging near the horizontal edges of the timeline
+    if (containerRef.current && drag) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const ZONE = 80
+      const distRight = rect.right  - e.clientX
+      const distLeft  = e.clientX   - rect.left
+      if (distRight > 0 && distRight < ZONE) containerRef.current.scrollLeft += (ZONE - distRight) / ZONE * 16
+      else if (distLeft > 0 && distLeft < ZONE) containerRef.current.scrollLeft -= (ZONE - distLeft) / ZONE * 16
+    }
   }, [drag, canEditAny, agentSlots])
 
-  const handlePointerUp = useCallback(async (e) => {
+  const handlePointerUp = useCallback((e) => {
     if (!drag || !canEditAny) return
+    containerRef.current?.releasePointerCapture(e.pointerId)
+
     const { type, agentId, dow: d, origStart, origEnd, activity, previewStart, previewEnd, conflict, edge } = drag
-    if (conflict) return
-    if (previewStart === origStart && previewEnd === origEnd) {
-      setDrag(null)
-      return
-    }
+    if (conflict) { setDrag(null); return }
+    if (previewStart === origStart && previewEnd === origEnd) { setDrag(null); return }
 
     justDragged.current = true
     setTimeout(() => { justDragged.current = false }, 150)
 
-    // Collect all changes to make
-    const updates = []
+    // Collect changes
+    const changes = []
     if (type === 'move') {
       for (let h = origStart; h <= origEnd; h++) {
-        if (h < previewStart || h > previewEnd) {
-          updates.push({ h, activity: null })
-        }
+        if (h < previewStart || h > previewEnd) changes.push({ hour: h, activity: null })
       }
       for (let h = previewStart; h <= previewEnd; h++) {
-        if (h < origStart || h > origEnd) {
-          updates.push({ h, activity })
-        }
+        if (h < origStart || h > origEnd) changes.push({ hour: h, activity })
       }
     } else {
       if (edge === 'right') {
         if (previewEnd > origEnd) {
-          for (let h = origEnd + 1;  h <= previewEnd; h++) updates.push({ h, activity })
+          for (let h = origEnd + 1; h <= previewEnd; h++) changes.push({ hour: h, activity })
         } else {
-          for (let h = previewEnd + 1; h <= origEnd; h++) updates.push({ h, activity: null })
+          for (let h = previewEnd + 1; h <= origEnd; h++) changes.push({ hour: h, activity: null })
         }
       } else {
         if (previewStart < origStart) {
-          for (let h = previewStart; h < origStart; h++) updates.push({ h, activity })
+          for (let h = previewStart; h < origStart; h++) changes.push({ hour: h, activity })
         } else {
-          for (let h = origStart; h < previewStart; h++) updates.push({ h, activity: null })
+          for (let h = origStart; h < previewStart; h++) changes.push({ hour: h, activity: null })
         }
       }
     }
 
-    // Make all the updates and wait for reload before clearing preview
-    const promises = updates.map(({ h, activity: act }) => updateSlot(agentId, d, h, act))
-    await Promise.all(promises)
-
-    // Wait a moment for React to process state updates from loadWeek
-    await new Promise(resolve => setTimeout(resolve, 150))
-
-    // Now clear the drag preview to show the updated schedule
-    setDrag(null)
-  }, [drag, canEditAny, updateSlot])
+    setDrag(null) // clear immediately — batchUpdateSlots applies an optimistic update
+    if (changes.length > 0) batchUpdateSlots(agentId, d, changes)
+  }, [drag, canEditAny, batchUpdateSlots])
 
   const openShiftModal = (agent, h, slots) => {
     if (!canEditAgent(agent.id) || justDragged.current) return
@@ -917,7 +915,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                         <td
                           key={startH}
                           colSpan={span}
-                          title={canEdit ? 'Click to edit · drag to move' : undefined}
+                          title={canEdit ? 'Click to edit · drag to move · drag edges to resize' : undefined}
                           className={`py-1 px-0.5 bg-transparent ${canEdit ? 'cursor-grab active:cursor-grabbing' : ''}`}
                           onClick={canEdit ? (e) => {
                             if (!justDragged.current) openShiftModal(agent, startH, baseSlots)
@@ -935,6 +933,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                             onPointerDown={canEdit ? (e) => {
                               if (e.target !== e.currentTarget && e.target.dataset.handle) return
                               e.stopPropagation()
+                              containerRef.current?.setPointerCapture(e.pointerId)
                               const h = clientXToHour(e.clientX)
                               setDrag({
                                 type: 'move', agentId: agent.id, dow,
@@ -948,9 +947,11 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                             {showHandles && (
                               <div
                                 data-handle="left"
-                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l hover:bg-white/20 z-10"
+                                title="Drag to resize"
+                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-l bg-white/10 hover:bg-white/30 z-10"
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
+                                  containerRef.current?.setPointerCapture(e.pointerId)
                                   setDrag({
                                     type: 'resize', edge: 'left', agentId: agent.id, dow,
                                     origStart: startH, origEnd: endH, activity,
@@ -964,9 +965,11 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                             {showHandles && (
                               <div
                                 data-handle="right"
-                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r hover:bg-white/20 z-10"
+                                title="Drag to resize"
+                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize rounded-r bg-white/10 hover:bg-white/30 z-10"
                                 onPointerDown={(e) => {
                                   e.stopPropagation()
+                                  containerRef.current?.setPointerCapture(e.pointerId)
                                   setDrag({
                                     type: 'resize', edge: 'right', agentId: agent.id, dow,
                                     origStart: startH, origEnd: endH, activity,
@@ -1736,6 +1739,7 @@ export default function TimelineView({
   phoneForecast: livePF,
   emailForecast: liveEF,
   updateSlot,
+  batchUpdateSlots,
   shiftTypes,
   onViewChange,
   onWeekChange,
@@ -2063,6 +2067,7 @@ export default function TimelineView({
               phoneForecast={phoneForecast}
               emailForecast={emailForecast}
               updateSlot={updateSlot}
+              batchUpdateSlots={batchUpdateSlots}
               shiftTypes={shiftTypes}
               handleRate={handleRate}
               userRole={userRole}
