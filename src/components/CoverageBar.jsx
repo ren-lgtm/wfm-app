@@ -245,7 +245,7 @@ export function CoverageBar({ phoneCov, emailCov, phoneForecast, emailForecast, 
 
       {/* Hour labels */}
       <div className="flex items-center gap-1">
-        <span className="w-14 shrink-0" />
+        <span className="w-14 shrink-0 text-right text-[9px] font-mono text-gray-700 pr-1">PT</span>
         <div className="flex gap-0.5 flex-1">
           {hours.map(h => (
             <div key={h} className="flex-1 text-center">

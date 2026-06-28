@@ -883,6 +883,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           </thead>
 
           <tbody>
+            {/* Empty state when no agents have been added yet */}
+            {agents.length === 0 && (
+              <tr>
+                <td colSpan={hours.length + 2} className="py-12 text-center">
+                  <p className="text-sm text-gray-500">No agents yet.</p>
+                  <p className="text-xs text-gray-600 mt-1">Add agents from the Users page to start building schedules.</p>
+                </td>
+              </tr>
+            )}
             {/* ── Agent rows ── */}
             {agents.map((agent, idx) => {
               const canEdit = canEditAgent(agent.id)

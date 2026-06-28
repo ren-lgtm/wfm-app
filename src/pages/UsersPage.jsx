@@ -93,7 +93,6 @@ function RoleDropdown({ value, onChange }) {
                 key={r}
                 type="button"
                 onClick={() => {
-                  console.log('[RoleDropdown] Clicked role:', r, 'current value:', value)
                   onChange(r)
                   setOpen(false)
                 }}
@@ -215,11 +214,6 @@ function EditRow({ user, agents, onSave, onCancel }) {
   const [role,    setRole]    = useState(user.role)
   const [agentId, setAgentId] = useState(user.agent_id ?? null)
   const [saving,  setSaving]  = useState(false)
-
-  // Debug: log role changes
-  useEffect(() => {
-    console.log('[EditRow] role state changed to:', role)
-  }, [role])
 
   const handleSave = async () => {
     setSaving(true)
@@ -407,8 +401,15 @@ export default function UsersPage({ addAgent }) {
                   type="email" value={inviteEmail}
                   onChange={e => { setInviteEmail(e.target.value); setInviteError('') }}
                   placeholder="colleague@gmail.com" autoFocus
-                  className="w-full bg-[#0C0F14] border border-[#2A3245] rounded-lg pl-8 pr-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
+                  className={`w-full bg-[#0C0F14] border rounded-lg pl-8 pr-8 py-2 text-sm text-white placeholder-gray-600 focus:outline-none transition-colors ${
+                    inviteEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())
+                      ? 'border-emerald-600 focus:border-emerald-500'
+                      : 'border-[#2A3245] focus:border-blue-500'
+                  }`}
                 />
+                {inviteEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim()) && (
+                  <Check size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400" />
+                )}
               </div>
               {inviteError && <p className="text-[11px] text-red-400 mt-1.5">{inviteError}</p>}
             </div>
