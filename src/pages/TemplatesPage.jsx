@@ -420,14 +420,17 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onUpdateSlot }) {
                     return (
                       <td key={day} className="border-r border-[#2A3245] p-0 bg-[#141922]" style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
                         <div className="flex relative w-full h-full">
-                          {/* Empty cells */}
-                          {runs.map(({ startH, endH, activity, span }) => {
-                            if (activity) return null
+                          {/* Empty cells + invisible spacers for shift blocks so flex positions stay in sync with the hour grid */}
+                          {runs.map(({ startH, activity, span }) => {
+                            if (activity) {
+                              // Spacer holds the correct width in the flex flow — the absolute shift block renders on top
+                              return <div key={`spacer-${startH}`} style={{ width: `${HOUR_COL_W * span}px`, flexShrink: 0 }} />
+                            }
                             return (
                               <div
                                 key={`empty-${startH}`}
-                                className="border-r border-[#2A3245] hover:bg-[#2A3245]/20 cursor-pointer"
-                                style={{ width: `${HOUR_COL_W * span}px`, height: '100%' }}
+                                className="border-r border-[#2A3245] hover:bg-[#2A3245]/20 cursor-pointer active:bg-[#2A3245]/70"
+                                style={{ width: `${HOUR_COL_W * span}px`, height: '100%', flexShrink: 0 }}
                                 onClick={() => openShiftModal(agent, day, slots, startH)}
                               />
                             )
