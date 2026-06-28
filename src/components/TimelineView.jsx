@@ -735,7 +735,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
             style={{
               left:        overlayLeft,
               width:       HOUR_COL_W,
-              borderLeft:  '2px solid rgb(59,130,246)',
+              borderLeft:  '2px solid #4F7EF8',
               background:  'rgba(30,58,138,0.08)',
             }}
           />

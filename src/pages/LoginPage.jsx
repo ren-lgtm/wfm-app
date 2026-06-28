@@ -22,9 +22,15 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#0C0F14] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-xl mx-auto mb-4">W</div>
-          <h1 className="text-xl font-semibold text-white">WFM · CX Staffing</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
+          <div className="w-14 h-14 rounded-2xl bg-[#4F7EF8] flex items-center justify-center mx-auto mb-4">
+            <svg width="30" height="30" viewBox="0 0 20 20" fill="none">
+              <rect x="2"    y="12" width="4.5" height="6"  rx="1" fill="white"/>
+              <rect x="7.75" y="8"  width="4.5" height="10" rx="1" fill="white"/>
+              <rect x="13.5" y="4"  width="4.5" height="14" rx="1" fill="white"/>
+            </svg>
+          </div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight">Tempo</h1>
+          <p className="text-sm text-gray-500 mt-1">Coverage, on schedule.</p>
         </div>
 
         <div className="bg-[#141922] border border-[#2A3245] rounded-xl p-6 space-y-4">

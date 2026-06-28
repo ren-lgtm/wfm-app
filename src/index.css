@@ -167,8 +167,21 @@ body {
 /* Font mono on dark bg cards */
 [data-theme="light"] [class*="bg-\[#0C0F14\]"] [class*="font-mono"] { color: #0F1523 !important; }
 
+/* ── TEMPO BRAND COLOR ─────────────────────────────────────────────────────── */
+/* Remaps all interactive blue-600/blue-500 elements to the Tempo brand color.
+   Email coverage cells (bg-blue-900/60, text-blue-300) are not affected. */
+.bg-blue-600                  { background-color: #4F7EF8 !important; }
+.hover\:bg-blue-500:hover     { background-color: #3D6CE6 !important; }
+.hover\:bg-blue-600:hover     { background-color: #3D6CE6 !important; }
+.disabled\:bg-blue-950:disabled { background-color: #1e1b4b !important; }
+.focus\:border-blue-500:focus { border-color: #4F7EF8 !important; }
+.hover\:border-blue-500:hover { border-color: #4F7EF8 !important; }
+.border-blue-400              { border-color: #4F7EF8 !important; }
+.border-t-blue-500            { border-top-color: #4F7EF8 !important; }
+
 /* Input fields */
 [data-theme="light"] [class*="bg-\[#0C0F14\]"] input { background: #F4F6FA !important; color: #0F1523 !important; border-color: #D0D6E4 !important; }
 
-/* WFM logo button stays blue */
-[data-theme="light"] .bg-blue-600 { background: #2563EB !important; color: #FFFFFF !important; }
+/* Tempo brand color — keep buttons blue in light mode */
+[data-theme="light"] .bg-blue-600 { background: #4F7EF8 !important; color: #FFFFFF !important; }
+[data-theme="light"] [class*="border-blue-500"] { border-color: #4F7EF8 !important; }

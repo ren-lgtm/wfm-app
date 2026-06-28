@@ -1,4 +1,14 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+
+function TempoMark({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <rect x="2"    y="12" width="4.5" height="6"  rx="1" fill="white"/>
+      <rect x="7.75" y="8"  width="4.5" height="10" rx="1" fill="white"/>
+      <rect x="13.5" y="4"  width="4.5" height="14" rx="1" fill="white"/>
+    </svg>
+  )
+}
 import {
   ChevronLeft, ChevronRight, ChevronDown, Menu,
   Users, BarChart2, Calendar, LayoutTemplate,
@@ -201,10 +211,12 @@ export default function SchedulePage({ theme, toggleTheme }) {
           {sidebarOpen ? (
             <>
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0">W</div>
+                <div className="w-7 h-7 rounded-lg bg-[#4F7EF8] flex items-center justify-center shrink-0">
+                  <TempoMark size={16} />
+                </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold leading-none" style={{ color: 'var(--text-primary)' }}>WFM</div>
-                  <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>CX Staffing</div>
+                  <div className="text-sm font-semibold leading-none tracking-tight" style={{ color: 'var(--text-primary)' }}>Tempo</div>
+                  <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>Coverage, on schedule.</div>
                 </div>
               </div>
               <button
@@ -219,10 +231,10 @@ export default function SchedulePage({ theme, toggleTheme }) {
           ) : (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm mx-auto"
+              className="w-7 h-7 rounded-lg bg-[#4F7EF8] flex items-center justify-center mx-auto"
               title="Expand sidebar"
             >
-              W
+              <TempoMark size={15} />
             </button>
           )}
         </div>
@@ -356,8 +368,10 @@ export default function SchedulePage({ theme, toggleTheme }) {
           >
             <Menu size={18} />
           </button>
-          <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0">W</div>
-          <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>WFM</span>
+          <div className="w-6 h-6 rounded-md bg-[#4F7EF8] flex items-center justify-center shrink-0">
+            <TempoMark size={13} />
+          </div>
+          <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>Tempo</span>
         </div>
         <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
 
