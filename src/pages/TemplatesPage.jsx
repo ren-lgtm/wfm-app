@@ -525,10 +525,10 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                           {/* Drag preview - show semi-transparent preview block while dragging */}
                           {isBeingDragged && previewRuns.length > 0 && (
                             <div
-                              className="absolute rounded opacity-60"
+                              className="absolute opacity-60"
                               style={{
-                                top: '2px',
-                                bottom: '2px',
+                                top: '0',
+                                bottom: '0',
                                 left: `${drag.previewStart * HOUR_COL_W}px`,
                                 width: `${(drag.previewEnd - drag.previewStart + 1) * HOUR_COL_W}px`,
                                 background: shiftTypes?.find(t => t.id === drag.activity)?.color || '#666',
@@ -545,14 +545,13 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                             return (
                               <div
                                 key={`shift-${startH}`}
-                                className={`absolute rounded cursor-grab active:cursor-grabbing transition-all ${isBeingDragged ? 'opacity-50' : 'hover:brightness-110 hover:shadow-lg'}`}
+                                className={`absolute cursor-grab active:cursor-grabbing transition-all ${isBeingDragged ? 'opacity-50' : 'hover:brightness-110 hover:shadow-lg'}`}
                                 style={{
-                                  top: '2px',
-                                  bottom: '2px',
+                                  top: '0',
+                                  bottom: '0',
                                   left: `${startH * HOUR_COL_W}px`,
                                   width: `${span * HOUR_COL_W}px`,
                                   background: shiftType?.color || '#666',
-                                  minHeight: '24px',
                                   boxShadow: isBeingDragged ? '0 0 0 2px rgba(255,255,255,0.2)' : undefined,
                                 }}
                                 onPointerDown={(e) => {
