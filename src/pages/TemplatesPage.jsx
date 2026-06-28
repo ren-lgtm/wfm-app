@@ -275,10 +275,16 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
     return <div className="text-gray-400 text-center py-8">Select or create a template to edit</div>
   }
 
-  const clientXToHour = (clientX) => {
-    if (!containerRef.current) return null
-    const rect = containerRef.current.getBoundingClientRect()
-    const x = clientX - rect.left + containerRef.current.scrollLeft - 140
+  // Convert a screen X to an hour (0-23) WITHIN the given day's column.
+  // The grid lays out 5 day columns side by side. Rather than guess the
+  // agent-column width, measure the target day column's real left edge from
+  // the DOM (it's tagged with data-day-col) so the math is exact for every day.
+  const clientXToHour = (clientX, day) => {
+    const container = containerRef.current
+    if (!container) return null
+    const dayEl = container.querySelector(`[data-day-col="${day}"]`)
+    if (!dayEl) return null
+    const x = clientX - dayEl.getBoundingClientRect().left
     return Math.max(0, Math.min(23, Math.floor(x / HOUR_COL_W)))
   }
 
@@ -290,8 +296,8 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
       // If moved more than 12px, treat as drag start (matches standard touch threshold)
       if (dx > 12 || dy > 12) {
         dragStartedRef.current = true
-        const h = clientXToHour(e.clientX)
         const pd = pointerDownRef.current
+        const h = clientXToHour(e.clientX, pd.day)
         setDrag({
           type: 'move',
           agentId: pd.agent.id,
@@ -308,7 +314,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
 
     setDrag(currentDrag => {
       if (!currentDrag) return null
-      const h = clientXToHour(e.clientX)
+      const h = clientXToHour(e.clientX, currentDrag.day)
       if (h === null) return currentDrag
 
       if (currentDrag.type === 'move') {
@@ -479,12 +485,15 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                     const slots = localSlots[agent.id]?.[day] || {}
                     const isBeingDragged = drag && drag.agentId === agent.id && drag.day === day
 
-                    // Build runs of contiguous activities
+                    // Build runs of contiguous activities. While dragging, hide
+                    // only the block being dragged (its original hours) — other
+                    // shifts in the same cell stay visible.
                     const runs = []
                     let i = 0
                     while (i < 24) {
                       const h = i
-                      const act = isBeingDragged ? null : (slots[h] || null)
+                      const isDraggedBlock = isBeingDragged && h >= drag.origStart && h <= drag.origEnd
+                      const act = isDraggedBlock ? null : (slots[h] || null)
                       if (!act) {
                         runs.push({ startH: h, endH: h, activity: null, span: 1 })
                         i++
@@ -504,7 +513,7 @@ function WeekTemplateGrid({ template, agents, shiftTypes, onSave }) {
                       })) : []
 
                     return (
-                      <td key={day} className="border-r border-[#2A3245] p-0 bg-[#141922]" style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
+                      <td key={day} data-day-col={day} className="border-r border-[#2A3245] p-0 bg-[#141922]" style={{ minWidth: HOUR_COL_W * 24, height: 32 }}>
                         <div className="flex relative w-full h-full">
                           {/* Empty cells + invisible spacers for shift blocks so flex positions stay in sync with the hour grid */}
                           {runs.map(({ startH, activity, span }) => {
