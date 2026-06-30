@@ -418,6 +418,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
     return true
   }
   const [shiftModal, setShiftModal] = useState(null)
+  const [blockTooltip, setBlockTooltip] = useState(null)
 
   // Keep a ref to the current localSlots so callbacks don't go stale
   const localSlotsRef = useRef(localSlots)
@@ -930,6 +931,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                         const mkResize = (edge) => (e) => {
                           e.stopPropagation()
                           containerRef.current?.setPointerCapture(e.pointerId)
+                          setBlockTooltip(null)
                           setDrag({
                             type: 'resize', edge, agentId: agent.id, dow,
                             origStart: startQ, origEnd: endQ, activity,
@@ -956,6 +958,7 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                               if (e.target.dataset.handle) return
                               e.stopPropagation()
                               containerRef.current?.setPointerCapture(e.pointerId)
+                              setBlockTooltip(null)
                               const q = clientXToQuarter(e.clientX)
                               setDrag({
                                 type: 'move', agentId: agent.id, dow,
@@ -964,6 +967,16 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
                                 previewStart: startQ, previewEnd: endQ, conflict: false,
                               })
                             } : undefined}
+                            onMouseEnter={(e) => {
+                              if (drag) return
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              setBlockTooltip({
+                                text: `${qLabel(startQ)}–${qLabel(endQ + 1)} PT`,
+                                x: rect.left + rect.width / 2,
+                                y: rect.top,
+                              })
+                            }}
+                            onMouseLeave={() => setBlockTooltip(null)}
                           >
                             {showHandles && (
                               <div data-handle="left" title="Drag to resize"
@@ -1217,6 +1230,16 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
           </span>
         )}
       </div>
+
+      {/* Block hover tooltip */}
+      {blockTooltip && !drag && (
+        <div
+          className="fixed z-50 pointer-events-none px-2 py-1 text-xs bg-[#0C0F14] text-gray-200 rounded-lg shadow-lg border border-[#2A3245] whitespace-nowrap"
+          style={{ left: blockTooltip.x, top: blockTooltip.y - 6, transform: 'translate(-50%, -100%)' }}
+        >
+          {blockTooltip.text}
+        </div>
+      )}
 
       {/* Drag conflict toast */}
       {drag?.conflict && (
