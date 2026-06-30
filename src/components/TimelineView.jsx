@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X, Copy, Calendar, Undo2, Redo2 } from 'lucide-react'
 import { useUndoRedo } from '../hooks/useUndoRedo'
 import {
@@ -1231,14 +1232,15 @@ function DayView({ date, agents, schedule, monday, phoneForecast, emailForecast,
         )}
       </div>
 
-      {/* Block hover tooltip */}
-      {blockTooltip && !drag && (
+      {/* Block hover tooltip — portal so it escapes overflow:hidden */}
+      {blockTooltip && !drag && createPortal(
         <div
-          className="fixed z-50 pointer-events-none px-2 py-1 text-xs bg-[#0C0F14] text-gray-200 rounded-lg shadow-lg border border-[#2A3245] whitespace-nowrap"
+          className="fixed z-[9999] pointer-events-none px-2 py-1 text-xs bg-[#0C0F14] text-gray-200 rounded-lg shadow-lg border border-[#2A3245] whitespace-nowrap"
           style={{ left: blockTooltip.x, top: blockTooltip.y - 6, transform: 'translate(-50%, -100%)' }}
         >
           {blockTooltip.text}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Drag conflict toast */}
